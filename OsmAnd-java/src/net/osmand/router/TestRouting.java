@@ -297,7 +297,7 @@ public class TestRouting {
 		for (File f : files) {
 			RandomAccessFile raf = new RandomAccessFile(f.getAbsolutePath(), "r"); //$NON-NLS-1$ //$NON-NLS-2$
 			System.out.println(f.getName());
-			rs[it++] = new BinaryMapIndexReader(raf);
+			rs[it++] = new BinaryMapIndexReader(raf, f);
 		}
 		return rs;
 	}
@@ -310,8 +310,8 @@ public class TestRouting {
 		RoutingConfiguration rconfig = config.build(vehicle, MEMORY_TEST_LIMIT);
 		RoutePlannerFrontEnd router = new RoutePlannerFrontEnd(oldRouting);
 		RoutingContext ctx = router.buildRoutingContext(rconfig, lib, rs);
-		RouteSegment startSegment = router.findRouteSegment(startLat, startLon, ctx);
-		RouteSegment endSegment = router.findRouteSegment(endLat, endLon, ctx);
+		RouteSegment startSegment = router.findRouteSegment(startLat, startLon, ctx, null);
+		RouteSegment endSegment = router.findRouteSegment(endLat, endLon, ctx, null);
 		if(startSegment == null){
 			throw new IllegalArgumentException("Start segment is not found ");
 		}

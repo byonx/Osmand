@@ -1,9 +1,7 @@
 package net.osmand.data;
 
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
-import java.util.Locale;
-import java.util.StringTokenizer;
+import android.content.Context;
+import android.support.annotation.NonNull;
 
 import com.jwetherell.openmap.common.LatLonPoint;
 import com.jwetherell.openmap.common.UTMPoint;
@@ -12,13 +10,19 @@ import net.osmand.plus.OsmandApplication;
 import net.osmand.plus.OsmandSettings;
 import net.osmand.plus.R;
 import net.osmand.util.Algorithms;
-import android.content.Context;
-import android.support.annotation.NonNull;
+
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.Locale;
+import java.util.StringTokenizer;
 
 public class PointDescription {
 	private String type = "";
 	private String name = "";
 	private String typeName;
+
+	private double lat = 0;
+	private double lon = 0;
 
 	public static final String POINT_TYPE_FAVORITE = "favorite";
 	public static final String POINT_TYPE_WPT = "wpt";
@@ -26,16 +30,29 @@ public class PointDescription {
 	public static final String POINT_TYPE_ADDRESS = "address";
 	public static final String POINT_TYPE_OSM_NOTE= "osm_note";
 	public static final String POINT_TYPE_MARKER = "marker";
+	public static final String POINT_TYPE_PARKING_MARKER = "parking_marker";
 	public static final String POINT_TYPE_AUDIO_NOTE = "audionote";
 	public static final String POINT_TYPE_VIDEO_NOTE = "videonote";
 	public static final String POINT_TYPE_PHOTO_NOTE = "photonote";
 	public static final String POINT_TYPE_LOCATION = "location";
+	public static final String POINT_TYPE_MY_LOCATION = "my_location";
 	public static final String POINT_TYPE_ALARM = "alarm";
 	public static final String POINT_TYPE_TARGET = "destination";
+	public static final String POINT_TYPE_MAP_MARKER = "map_marker";
 	public static final String POINT_TYPE_OSM_BUG = "bug";
-	
+	public static final String POINT_TYPE_WORLD_REGION = "world_region";
+	public static final String POINT_TYPE_GPX_ITEM = "gpx_item";
+	public static final String POINT_TYPE_WORLD_REGION_SHOW_ON_MAP = "world_region_show_on_map";
+	public static final String POINT_TYPE_BLOCKED_ROAD = "blocked_road";
+
 
 	public static final PointDescription LOCATION_POINT = new PointDescription(POINT_TYPE_LOCATION, "");
+
+	public PointDescription(double lat, double lon) {
+		this(POINT_TYPE_LOCATION, "");
+		this.lat = lat;
+		this.lon = lon;
+	}
 
 	public PointDescription(String type, String name) {
 		this.type = type;
@@ -52,6 +69,14 @@ public class PointDescription {
 		if (this.name == null) {
 			this.name = "";
 		}
+	}
+	
+	public void setLat(double lat) {
+		this.lat = lat;
+	}
+	
+	public void setLon(double lon) {
+		this.lon = lon;
 	}
 
 	public void setTypeName(String typeName){
@@ -72,21 +97,25 @@ public class PointDescription {
 	}
 
 	@NonNull
-	public String getSimpleName(Context ctx, double lat, double lon) {
+	public String getSimpleName(Context ctx, boolean addTypeName) {
 		if (isLocation()) {
-			return getLocationName(ctx, lat, lon, true).replace('\n', ' ');
+			if (!Algorithms.isEmpty(name) && !name.equals(ctx.getString(R.string.no_address_found))) {
+				return name;
+			} else {
+				return getLocationName(ctx, lat, lon, true).replace('\n', ' ');
+			}
 		}
 		if (!Algorithms.isEmpty(typeName)) {
 			if (Algorithms.isEmpty(name)) {
 				return typeName;
-			} else {
+			} else if(addTypeName){
 				return typeName.trim() + ": " + name;
 			}
 		}
 		return name;
 	}
 	
-	public String getFullPlainName(Context ctx, double lat, double lon) {
+	public String getFullPlainName(Context ctx) {
 		if (isLocation()) {
 			return getLocationName(ctx, lat, lon, false);
 		} else {
@@ -109,7 +138,7 @@ public class PointDescription {
 		}
 	}
 
-	private String getLocationName(Context ctx, double lat, double lon, boolean sh) {
+	public static String getLocationName(Context ctx, double lat, double lon, boolean sh) {
 		OsmandSettings st = ((OsmandApplication) ctx.getApplicationContext()).getSettings();
 		int f = st.COORDINATES_FORMAT.get();
 		if (f == PointDescription.UTM_FORMAT) {
@@ -117,8 +146,18 @@ public class PointDescription {
 			return pnt.zone_number + "" + pnt.zone_letter + " " + ((long) pnt.northing) + " "
 					+ ((long) pnt.easting);
 		} else {
-			return ctx.getString( sh? R.string.short_location_on_map : R.string.location_on_map, convert(lat, f), convert(lon, f));
+			try {
+				return ctx.getString(sh ? R.string.short_location_on_map : R.string.location_on_map, convert(lat, f),
+						convert(lon, f));
+			} catch(RuntimeException e) {
+				e.printStackTrace();
+				return ctx.getString(sh ? R.string.short_location_on_map : R.string.location_on_map, 0, 0); 
+			}
 		}
+	}
+
+	public boolean contextMenuDisabled() {
+		return POINT_TYPE_WORLD_REGION_SHOW_ON_MAP.equals(type);
 	}
 
 	public boolean isLocation() {
@@ -153,6 +192,21 @@ public class PointDescription {
 		return POINT_TYPE_PHOTO_NOTE.equals(type);
 	}
 
+	public boolean isDestination() {
+		return POINT_TYPE_TARGET.equals(type);
+	}
+
+	public boolean isMapMarker() {
+		return POINT_TYPE_MAP_MARKER.equals(type);
+	}
+
+	public boolean isParking() {
+		return POINT_TYPE_PARKING_MARKER.equals(type);
+	}
+
+	public boolean isMyLocation() {
+		return POINT_TYPE_MY_LOCATION.equals(type);
+	}
 
 	@Override
 	public int hashCode() {
@@ -161,6 +215,8 @@ public class PointDescription {
 		result = prime * result + ((name == null) ? 0 : name.hashCode());
 		result = prime * result + ((type == null) ? 0 : type.hashCode());
 		result = prime * result + ((typeName == null) ? 0 : typeName.hashCode());
+		result = prime * result + ((lat == 0) ? 0 : new Double(lat).hashCode());
+		result = prime * result + ((lon == 0) ? 0 : new Double(lon).hashCode());
 		return result;
 	}
 
@@ -173,6 +229,8 @@ public class PointDescription {
 		PointDescription other = (PointDescription) obj;
 		if (Algorithms.objectEquals(other.name, name) 
 				&& Algorithms.objectEquals(other.type, type)
+				&& Algorithms.objectEquals(other.lat, lat)
+				&& Algorithms.objectEquals(other.lon, lon)
 				&& Algorithms.objectEquals(other.typeName, typeName)) {
 			return true;
 		}
@@ -182,8 +240,20 @@ public class PointDescription {
 	
 	public static String getSimpleName(LocationPoint o, Context ctx) {
 		PointDescription pd = o.getPointDescription(ctx);
-		return pd.getSimpleName(ctx, o.getLatitude(), o.getLongitude());
+		return pd.getSimpleName(ctx, true);
 //		return o.getPointDescription(ctx).getFullPlainName(ctx, o.getLatitude(), o.getLongitude());
+	}
+
+	public boolean isSearchingAddress(Context ctx) {
+		return !Algorithms.isEmpty(name) && isLocation() && name.equals(getSearchAddressStr(ctx));
+	}
+
+	public static String getSearchAddressStr(Context ctx) {
+		return ctx.getString(R.string.looking_up_address) + ctx.getString(R.string.shared_string_ellipsis);
+	}
+
+	public static String getAddressNotFoundStr(Context ctx) {
+		return ctx.getString(R.string.no_address_found);
 	}
 
 	public static String serializeToString(PointDescription p) {
@@ -197,20 +267,28 @@ public class PointDescription {
 		return tp + "#" + p.name;
 	}
 
-	public static PointDescription deserializeFromString(String s) {
+	public static PointDescription deserializeFromString(String s, LatLon l) {
+		PointDescription pd = null ;
 		if (s != null && s.length() > 0) {
 			int in = s.indexOf('#');
 			if (in >= 0) {
 				String nm = s.substring(in + 1).trim();
 				String tp = s.substring(0, in);
 				if(tp.contains(".")) {
-					return new PointDescription(tp.substring(0, tp.indexOf('.')), tp.substring(tp.indexOf('.') + 1), nm);
+					pd = new PointDescription(tp.substring(0, tp.indexOf('.')), tp.substring(tp.indexOf('.') + 1), nm);
 				} else {
-					return new PointDescription(tp, nm);
+					pd = new PointDescription(tp, nm);
 				}
 			}
 		}
-		return null;
+		if(pd == null) {
+			pd = new PointDescription(POINT_TYPE_LOCATION, "");
+		}
+		if(pd.isLocation() && l != null) {
+			pd.setLat(l.getLatitude());
+			pd.setLon(l.getLongitude());
+		}
+		return pd;
 	}
 	
 

@@ -3,11 +3,19 @@
  */
 package net.osmand.plus.myplaces;
 
-import java.io.File;
-import java.lang.ref.WeakReference;
-import java.util.ArrayList;
-import java.util.List;
+import android.app.Activity;
+import android.graphics.drawable.Drawable;
+import android.os.Bundle;
+import android.support.v4.app.Fragment;
+import android.support.v4.view.ViewPager;
+import android.support.v7.widget.SearchView;
+import android.text.Spannable;
+import android.text.SpannableStringBuilder;
+import android.text.style.ImageSpan;
+import android.view.MenuItem;
+import android.widget.ImageView;
 
+import net.osmand.IndexConstants;
 import net.osmand.plus.OsmAndLocationProvider;
 import net.osmand.plus.OsmandApplication;
 import net.osmand.plus.OsmandPlugin;
@@ -15,47 +23,59 @@ import net.osmand.plus.OsmandSettings;
 import net.osmand.plus.R;
 import net.osmand.plus.activities.FavoritesTreeFragment;
 import net.osmand.plus.activities.TabActivity;
-import net.osmand.plus.myplaces.AvailableGPXFragment;
-import net.osmand.plus.osmedit.OsmEditingPlugin;
 import net.osmand.plus.views.controls.PagerSlidingTabStrip;
-import android.app.Activity;
-import android.graphics.drawable.Drawable;
-import android.os.Bundle;
-import android.support.v4.app.Fragment;
-import android.support.v4.view.ViewPager;
-import android.support.v7.widget.SearchView;
-import android.support.v7.widget.Toolbar;
-import android.text.Spannable;
-import android.text.SpannableStringBuilder;
-import android.text.style.ImageSpan;
-import android.view.MenuItem;
-import android.view.View;
-import android.widget.ImageView;
+
+import java.io.File;
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  *
  */
 public class FavoritesActivity extends TabActivity {
 
-//	private static final String FAVOURITES_INFO = "FAVOURITES_INFO";
-	private static final String TRACKS = "TRACKS";
-//	private static final String SELECTED_TRACK = "SELECTED_TRACK";
-	public static int FAVORITES_TAB = 0;
-	public static int GPX_TAB = 1;
-	public static int SELECTED_GPX_TAB = 2;
-	public static int NOTES_TAB = 3;
-	public static int OSM_EDITS_TAB = 4;
-	public static String TAB_PARAM = "TAB_PARAM";
-	protected List<WeakReference<Fragment>> fragList = new ArrayList<WeakReference<Fragment>>();
+	public static final int  GPX_TAB = R.string.shared_string_my_tracks;
+	public static final int  FAV_TAB = R.string.shared_string_my_favorites;
+	protected List<WeakReference<Fragment>> fragList = new ArrayList<>();
+	private int tabSize;
 
 	@Override
 	public void onCreate(Bundle icicle) {
 		((OsmandApplication) getApplication()).applyTheme(this);
 		super.onCreate(icicle);
+		//noinspection ConstantConditions
 		getSupportActionBar().setTitle(R.string.shared_string_my_places);
 		getSupportActionBar().setElevation(0);
 
-		File[] lf = ((OsmandApplication) getApplication()).getAppPath(TRACKS).listFiles();
+		
+		setContentView(R.layout.tab_content);
+		List<TabItem> mTabs = getTabItems();
+		setTabs(mTabs);
+		// setupHomeButton();
+	}
+	
+	
+
+	private void setTabs(List<TabItem> mTabs) {
+		PagerSlidingTabStrip mSlidingTabLayout = (PagerSlidingTabStrip) findViewById(R.id.sliding_tabs);
+		OsmandSettings settings = ((OsmandApplication) getApplication()).getSettings();
+		ViewPager mViewPager = (ViewPager) findViewById(R.id.pager);
+		Integer tabId = settings.FAVORITES_TAB.get();
+		int tab = 0;
+		for(int i = 0; i < mTabs.size(); i++) {
+			if(mTabs.get(i).resId == tabId) {
+				tab = i;
+			}
+		}
+		tabSize = mTabs.size();
+		setViewPagerAdapter(mViewPager, mTabs);
+		mSlidingTabLayout.setViewPager(mViewPager);
+		mViewPager.setCurrentItem(tab);
+	}
+
+	private List<TabItem> getTabItems() {
+		File[] lf = ((OsmandApplication) getApplication()).getAppPath(IndexConstants.GPX_INDEX_DIR).listFiles();
 		boolean hasGpx = false;
 		if (lf != null) {
 			for (File t : lf) {
@@ -66,51 +86,27 @@ public class FavoritesActivity extends TabActivity {
 			}
 		}
 
-		setContentView(R.layout.tab_content);
-
-		PagerSlidingTabStrip mSlidingTabLayout = (PagerSlidingTabStrip) findViewById(R.id.sliding_tabs);
-		OsmandSettings settings = ((OsmandApplication) getApplication()).getSettings();
-		
-		ViewPager mViewPager = (ViewPager) findViewById(R.id.pager);
-
-		List<TabItem> mTabs = new ArrayList<TabItem>();
+		List<TabItem> mTabs = new ArrayList<>();
 		mTabs.add(getTabIndicator(R.string.shared_string_my_favorites, FavoritesTreeFragment.class));
 		if (hasGpx) {
 			mTabs.add(getTabIndicator(R.string.shared_string_my_tracks, AvailableGPXFragment.class));
 		}
 		OsmandPlugin.addMyPlacesTabPlugins(this, mTabs, getIntent());
-		
-		Integer tab = settings.FAVORITES_TAB.get();
-		if (tab == NOTES_TAB) {
-			if (OsmandPlugin.getEnabledPlugin(OsmEditingPlugin.class) != null){
-				tab = mTabs.size() - 2;
-			} else {
-				tab = mTabs.size() - 1;
-			}
-
-		} else if (tab == OSM_EDITS_TAB) {
-			tab = mTabs.size() - 1;
-		}
-		
-		setViewPagerAdapter(mViewPager, mTabs);
-		mSlidingTabLayout.setViewPager(mViewPager);
-
-		if (tab > mTabs.size() - 1){
-			tab = 0;
-		}
-		mViewPager.setCurrentItem(tab);
-		// setupHomeButton();
+		return mTabs;
 	}
 
 	@Override
 	public void onAttachFragment(Fragment fragment) {
-		fragList.add(new WeakReference<Fragment>(fragment));
+		fragList.add(new WeakReference<>(fragment));
 	}
 
 	@Override
 	protected void onResume() {
 		super.onResume();
-
+		List<TabItem> mTabs = getTabItems();
+		if(mTabs.size() != tabSize ) {
+			setTabs(mTabs);
+		}
 	}
 
 	public OsmandApplication getMyApplication() {
@@ -120,12 +116,6 @@ public class FavoritesActivity extends TabActivity {
 	private OsmAndLocationProvider getLocationProvider() {
 		return getMyApplication().getLocationProvider();
 	}
-
-	@Override
-	protected void onPause() {
-		super.onPause();
-	}
-
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {

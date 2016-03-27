@@ -1,19 +1,39 @@
 package net.osmand.plus.activities.search;
 
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.app.Dialog;
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
-import android.os.*;
-import android.support.v4.view.MenuItemCompat;
-import android.view.*;
-import android.view.MenuItem.OnMenuItemClickListener;
-import android.widget.*;
+import android.graphics.Typeface;
+import android.os.AsyncTask;
+import android.os.AsyncTask.Status;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
+import android.text.Editable;
+import android.text.Spannable;
+import android.text.TextWatcher;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.StyleSpan;
+import android.view.KeyEvent;
+import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.EditText;
+import android.widget.Filter;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.TextView.BufferType;
+import android.widget.TextView.OnEditorActionListener;
+
 import net.osmand.Collator;
 import net.osmand.CollatorStringMatcher;
 import net.osmand.CollatorStringMatcher.StringMatcherMode;
@@ -26,44 +46,38 @@ import net.osmand.plus.OsmAndConstants;
 import net.osmand.plus.OsmandApplication;
 import net.osmand.plus.OsmandSettings;
 import net.osmand.plus.R;
-import net.osmand.plus.TargetPointsHelper;
 import net.osmand.plus.activities.MapActivity;
 import net.osmand.plus.activities.OsmandListActivity;
 import net.osmand.plus.activities.search.SearchAddressFragment.AddressInformation;
 import net.osmand.plus.dialogs.DirectionsDialogs;
 import net.osmand.plus.dialogs.FavoriteDialogs;
+
 import org.apache.commons.logging.Log;
-import android.annotation.SuppressLint;
-import android.app.ActionBar;
-import android.app.Activity;
-import android.app.Dialog;
-import android.content.Intent;
-import android.graphics.Typeface;
-import android.os.AsyncTask.Status;
-import android.text.Editable;
-import android.text.Spannable;
-import android.text.TextWatcher;
-import android.text.style.ForegroundColorSpan;
-import android.text.style.StyleSpan;
-import android.view.inputmethod.EditorInfo;
-import android.widget.TextView.BufferType;
-import android.widget.TextView.OnEditorActionListener;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 
 @SuppressLint("NewApi")
 public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity {
 
+	private static final String ENDING_TEXT = "ending_text";
 	private EditText searchText;
 	private AsyncTask<Object, ?, ?> initializeTask;
 	
 	protected static final int MESSAGE_CLEAR_LIST = OsmAndConstants.UI_HANDLER_SEARCH + 2;
 	protected static final int MESSAGE_ADD_ENTITY = OsmAndConstants.UI_HANDLER_SEARCH + 3;
-	protected static final String SEQUENTIAL_SEARCH = "SEQUENTIAL_SEARCH";
+	protected static final String SELECT_ADDRESS = "SEQUENTIAL_SEARCH";
 	
 	protected ProgressBar progress;
 	protected LatLon locationToSearch;
 	protected OsmandSettings settings;
-	protected List<T> initialListToFilter = new ArrayList<T>();
+	protected List<T> initialListToFilter = new ArrayList<>();
 	protected Handler uiHandler;
 	protected Collator collator;
 	protected NamesFilter namesFilter;
@@ -71,7 +85,7 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 	private boolean initFilter = false;
 	private String endingText = "";
 	private T endingObject;
-	private StyleSpan previousSpan;
+	private StyleSpan previousSpan = new StyleSpan(Typeface.BOLD_ITALIC);
 	private static final Log log = PlatformUtil.getLog(SearchByNameAbstractActivity.class);
 	
 	private static final int NAVIGATE_TO = 3;
@@ -99,11 +113,14 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 		setListAdapter(namesAdapter);
 		
 		collator = OsmAndCollator.primaryCollator();
- 	    
-		
+
 		progress = (ProgressBar) findViewById(R.id.ProgressBar);
 			
 		searchText = (EditText) findViewById(R.id.SearchText);
+
+		// ppenguin 2016-03-07: try to avoid full screen input in landscape mode (when softKB too large)
+		searchText.setImeOptions(searchText.getImeOptions() | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN);
+
 		searchText.addTextChangedListener(new TextWatcher(){
 
 			@Override
@@ -128,10 +145,12 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 			}
 		});
 		// Not perfect
-//		searchText.setOnClickListener(new OnClickListener() {
+//		filter.setOnClickListener(new OnClickListener() {
 //			}
 //		});
-		searchText.setImeOptions(EditorInfo.IME_ACTION_DONE);
+
+        // ppenguin 2016-03-07: try to avoid full screen input in landscape mode (when softKB too large) => IME-flags necessary here too!
+		searchText.setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN);
 		searchText.requestFocus();
 		searchText.setOnEditorActionListener(new OnEditorActionListener() {
 	        @Override
@@ -154,6 +173,7 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 			}
 			
 		});
+		selectAddress = getIntent() != null && getIntent().hasExtra(SELECT_ADDRESS);
 		getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
 		if(initializeTask != null){
 			initializeTask.execute();
@@ -162,6 +182,10 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 	
 	protected void reset() {
 		searchText.setText("");
+	}
+	
+	public String getLangPreferredName(MapObject mo) {
+		return mo.getName(settings.MAP_PREFERRED_LOCALE.get());
 	}
 	
 	protected void addFooterViews() {
@@ -197,7 +221,7 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 	
 	
 	private int MAX_VISIBLE_NAME = 18;
-	private boolean sequentialSearch;
+	private boolean selectAddress;
 	
 	public String getCurrentFilter() {
 		return currentFilter;
@@ -215,18 +239,20 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 	@Override
 	protected void onSaveInstanceState(Bundle outState) {
 		super.onSaveInstanceState(outState);
-		outState.putString("ENDING_TEXT", endingText);
-		outState.putParcelable("PREVIOUS_SPAN", this.previousSpan);
+		outState.putString(ENDING_TEXT, endingText);
 	}
 	
 	@Override
 	protected void onRestoreInstanceState(Bundle prevState) {
-		endingText = prevState.getString("ENDING_TEXT");
+		endingText = prevState.getString(ENDING_TEXT);
 		if(endingText == null) {
 			endingText = "";
 		}
-		previousSpan = prevState.getParcelable("PREVIOUS_SPAN"); 
 		super.onRestoreInstanceState(prevState);
+	}
+	
+	protected boolean isSelectAddres() {
+		return selectAddress;
 	}
 	
 	private void querySearch(final String filter) {
@@ -246,12 +272,9 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 		if(updateText) {
 			searchText.getText().replace(currentFilter.length(), currentFilter.length() + prevEndtext.length(), locEndingText);
 		}
-		if (previousSpan != null) {
-			searchText.getText().removeSpan(previousSpan);
-			previousSpan = null;
-		}
+
+		searchText.getText().removeSpan(previousSpan);
 		if (locEndingText.length() > 0) {
-			previousSpan = new StyleSpan(Typeface.BOLD_ITALIC);
 			searchText.getText().setSpan(previousSpan, currentFilter.length(), currentFilter.length() + locEndingText.length(),
 					Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
 			if (searchText.getSelectionEnd() > currentFilter.length()) {
@@ -288,6 +311,10 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 
 	public abstract String getText(T obj);
 	
+	public String getAdditionalFilterText(T obj) {
+		return null;
+	}
+	
 	public String getShortText(T obj) {
 		return getText(obj);
 	}
@@ -300,13 +327,18 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 		if(filter == null || filter.length() == 0){
 			return true;
 		}
-		return CollatorStringMatcher.cmatches(collator, getText(obj), filter, StringMatcherMode.CHECK_STARTS_FROM_SPACE);
+		boolean matches = CollatorStringMatcher.cmatches(collator, getText(obj), filter, StringMatcherMode.CHECK_STARTS_FROM_SPACE);
+		if(!matches && getAdditionalFilterText(obj) != null) {
+			matches = CollatorStringMatcher.cmatches(collator, getAdditionalFilterText(obj), filter, StringMatcherMode.CHECK_STARTS_FROM_SPACE);
+		}
+		return matches;
 	}
 	
 
 	@Override
 	protected void onResume() {
 		super.onResume();
+		selectAddress = getIntent() != null && getIntent().getBooleanExtra(SELECT_ADDRESS, false);
 		setOnItemClickListener(new AdapterView.OnItemClickListener() {
 			@Override
 			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
@@ -315,14 +347,12 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 			}
 		});
 		Intent intent = getIntent();
-		sequentialSearch = false;
 		if(intent != null){
 			if(intent.hasExtra(SearchActivity.SEARCH_LAT) && intent.hasExtra(SearchActivity.SEARCH_LON)){
 				double lat = intent.getDoubleExtra(SearchActivity.SEARCH_LAT, 0);
 				double lon = intent.getDoubleExtra(SearchActivity.SEARCH_LON, 0);
 				locationToSearch = new LatLon(lat, lon); 
 			}
-			sequentialSearch = intent.hasExtra(SEQUENTIAL_SEARCH) && getAddressInformation() != null;
 		}
 		if(locationToSearch == null){
 			locationToSearch = settings.getLastKnownMapLocation();
@@ -355,7 +385,7 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 	
 	
 	class UIUpdateHandler extends Handler {
-		private Map<String, Integer> endingMap = new HashMap<String, Integer>();
+		private Map<String, Integer> endingMap = new HashMap<>();
 		private int minimalIndex = Integer.MAX_VALUE;
 		private String minimalText = null;
 		
@@ -482,9 +512,9 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 				if(cintent.hasExtra(SearchActivity.SEARCH_LAT) && cintent.hasExtra(SearchActivity.SEARCH_LON)){
 					intent.putExtra(SearchActivity.SEARCH_LAT, cintent.getDoubleExtra(SearchActivity.SEARCH_LAT, 0));
 					intent.putExtra(SearchActivity.SEARCH_LON, cintent.getDoubleExtra(SearchActivity.SEARCH_LON, 0));
-					intent.putExtra(SEQUENTIAL_SEARCH, true);
 				}
 			}
+			intent.putExtra(SELECT_ADDRESS, selectAddress);
 			startActivity(intent);
 		}
 	}
@@ -503,63 +533,9 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 	
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
-		if (sequentialSearch) {
-			OsmandApplication app  = ((OsmandApplication) getApplication());
-			MenuItem menuItem = menu.add(0, NAVIGATE_TO, 0, R.string.context_menu_item_directions_to);
-			MenuItemCompat.setShowAsAction(menuItem,
-					MenuItemCompat.SHOW_AS_ACTION_ALWAYS | MenuItemCompat.SHOW_AS_ACTION_WITH_TEXT);
-			menuItem = menuItem.setIcon(app.getIconsCache().getActionBarIcon(R.drawable.ic_action_gdirections_dark));
-			menuItem.setOnMenuItemClickListener(new MenuItem.OnMenuItemClickListener() {
-				@Override
-				public boolean onMenuItemClick(MenuItem item) {
-					select(NAVIGATE_TO);
-					return true;
-				}
-			});
-			TargetPointsHelper targets = ((OsmandApplication) getApplication()).getTargetPointsHelper();
-			if (targets.getPointToNavigate() != null) {
-				menuItem = menu.add(0, ADD_WAYPOINT, 0, R.string.context_menu_item_intermediate_point);
-				MenuItemCompat.setShowAsAction(menuItem,
-						MenuItemCompat.SHOW_AS_ACTION_ALWAYS | MenuItemCompat.SHOW_AS_ACTION_WITH_TEXT);
-				menuItem = menuItem.setIcon(app.getIconsCache().getActionBarIcon(R.drawable.ic_action_flage_dark));
-			} else {
-				menuItem = menu.add(0, ADD_WAYPOINT, 0, R.string.context_menu_item_destination_point);
-				MenuItemCompat.setShowAsAction(menuItem,
-						MenuItemCompat.SHOW_AS_ACTION_ALWAYS | MenuItemCompat.SHOW_AS_ACTION_WITH_TEXT);
-				menuItem = menuItem.setIcon(app.getIconsCache().getActionBarIcon( R.drawable.ic_action_flag_dark));
-			}
-			menuItem.setOnMenuItemClickListener(new OnMenuItemClickListener() {
-				@Override
-				public boolean onMenuItemClick(MenuItem item) {
-					select(ADD_WAYPOINT);
-					return true;
-				}
-			});
-			menuItem = menu.add(0, SHOW_ON_MAP, 0, R.string.shared_string_show_on_map);
-			MenuItemCompat.setShowAsAction(menuItem,
-					MenuItemCompat.SHOW_AS_ACTION_ALWAYS | MenuItemCompat.SHOW_AS_ACTION_WITH_TEXT);
-			menuItem = menuItem.setIcon(app.getIconsCache().getActionBarIcon(R.drawable.ic_action_marker_dark));
-
-			menuItem.setOnMenuItemClickListener(new OnMenuItemClickListener() {
-				@Override
-				public boolean onMenuItemClick(MenuItem item) {
-					select(SHOW_ON_MAP);
-					return true;
-				}
-			});
-
-			menuItem = menu.add(0, ADD_TO_FAVORITE, 0, R.string.shared_string_add_to_favorites);
-			MenuItemCompat.setShowAsAction(menuItem,
-					MenuItemCompat.SHOW_AS_ACTION_ALWAYS | MenuItemCompat.SHOW_AS_ACTION_WITH_TEXT);
-			menuItem = menuItem.setIcon(app.getIconsCache().getActionBarIcon(R.drawable.ic_action_fav_dark));
-
-			menuItem.setOnMenuItemClickListener(new OnMenuItemClickListener() {
-				@Override
-				public boolean onMenuItemClick(MenuItem item) {
-					select(ADD_TO_FAVORITE);
-					return true;
-				}
-			});
+		if (!selectAddress && getAddressInformation() != null) {
+			createMenuItem(menu, SHOW_ON_MAP, R.string.shared_string_show_on_map,
+					R.drawable.ic_action_marker_dark, MenuItem.SHOW_AS_ACTION_ALWAYS);
 		} else {
 			createMenuItem(menu, 1, R.string.shared_string_ok,
 					R.drawable.ic_action_done, MenuItem.SHOW_AS_ACTION_ALWAYS);
@@ -574,7 +550,7 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 	protected void select(int mode) {
 		LatLon searchPoint = settings.getLastSearchedPoint();
 		AddressInformation ai = getAddressInformation();
-		if (ai != null) {
+		if (ai != null && searchPoint != null) {
 			if (mode == ADD_TO_FAVORITE) {
 				Bundle b = new Bundle();
 				Dialog dlg = FavoriteDialogs.createAddFavouriteDialog(getActivity(), b);
@@ -588,12 +564,16 @@ public abstract class SearchByNameAbstractActivity<T> extends OsmandListActivity
 				DirectionsDialogs.addWaypointDialogAndLaunchMap(getActivity(), searchPoint.getLatitude(),
 						searchPoint.getLongitude(), ai.getHistoryName());
 			} else if (mode == SHOW_ON_MAP) {
-				settings.setMapLocationToShow(searchPoint.getLatitude(), searchPoint.getLongitude(), ai.zoom,
-						ai.getHistoryName());
-				MapActivity.launchMapActivityMoveToTop(getActivity());
+				showOnMap(searchPoint, ai);
 			}
 		}
 		
+	}
+
+	public void showOnMap(LatLon searchPoint, AddressInformation ai) {
+		settings.setMapLocationToShow(searchPoint.getLatitude(), searchPoint.getLongitude(), ai.zoom,
+				ai.getHistoryName());
+		MapActivity.launchMapActivityMoveToTop(getActivity());
 	}
 
 	private Activity getActivity() {

@@ -98,6 +98,9 @@ public class CachedOsmandIndexes {
 				cblock.setType(mr.type);
 				addr.addCities(cblock);
 			}
+			for(String s : index.getAttributeTagsTable()) {
+				addr.addAdditionalTags(s);
+			}
 			fileIndex.addAddressIndex(addr);
 		}
 		
@@ -182,19 +185,19 @@ public class CachedOsmandIndexes {
 		BinaryMapIndexReader reader = null;
 		if (found == null) {
 			long val = System.currentTimeMillis();
-			reader = new BinaryMapIndexReader(mf);
+			reader = new BinaryMapIndexReader(mf, f);
 			addToCache(reader, f);
 			if (log.isDebugEnabled()) {
 				log.debug("Initializing db " + f.getAbsolutePath() + " " + (System.currentTimeMillis() - val ) + "ms"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 			}
 		} else {
-			reader = initFileIndex(found, mf);
+			reader = initFileIndex(found, mf, f);
 		}
 		return reader;
 	}
 	
-	private BinaryMapIndexReader initFileIndex(FileIndex found, RandomAccessFile mf) throws IOException {
-		BinaryMapIndexReader reader = new BinaryMapIndexReader(mf, false);
+	private BinaryMapIndexReader initFileIndex(FileIndex found, RandomAccessFile mf, File f) throws IOException {
+		BinaryMapIndexReader reader = new BinaryMapIndexReader(mf, f, false);
 		reader.version = found.getVersion();
 		reader.dateCreated = found.getDateModified();
 		
@@ -234,6 +237,9 @@ public class CachedOsmandIndexes {
 				cblock.filePointer = (int) mr.getOffset();
 				cblock.type = mr.getType();
 				mi.cities.add(cblock);
+			}
+			for(String s : index.getAdditionalTagsList()) {
+				mi.attributeTagsTable.add(s);
 			}
 			reader.addressIndexes.add(mi);
 			reader.indexes.add(mi);

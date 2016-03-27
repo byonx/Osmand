@@ -2,12 +2,13 @@ package net.osmand.plus.routepointsnavigation;
 
 import android.graphics.Canvas;
 import android.graphics.PointF;
-import android.os.AsyncTask;
 import android.widget.ArrayAdapter;
+
 import net.osmand.data.LatLon;
 import net.osmand.data.PointDescription;
 import net.osmand.data.RotatedTileBox;
 import net.osmand.plus.ContextMenuAdapter;
+import net.osmand.plus.ContextMenuItem;
 import net.osmand.plus.GPXUtilities;
 import net.osmand.plus.R;
 import net.osmand.plus.activities.MapActivity;
@@ -17,9 +18,6 @@ import net.osmand.plus.views.OsmandMapTileView;
 
 import java.util.List;
 
-/**
- * Created by Barsik on 20.06.2014.
- */
 public class RoutePointsLayer  extends OsmandMapLayer implements ContextMenuLayer.IContextMenuProvider {
 
 	private final RoutePointsPlugin plugin;
@@ -28,6 +26,21 @@ public class RoutePointsLayer  extends OsmandMapLayer implements ContextMenuLaye
 	public RoutePointsLayer(MapActivity map, RoutePointsPlugin plugin){
 		this.map = map;
 		this.plugin = plugin;
+	}
+
+	@Override
+	public boolean disableSingleTap() {
+		return false;
+	}
+
+	@Override
+	public boolean disableLongPressOnMap() {
+		return false;
+	}
+
+	@Override
+	public boolean isObjectClickable(Object o) {
+		return false;
 	}
 
 	@Override
@@ -71,8 +84,8 @@ public class RoutePointsLayer  extends OsmandMapLayer implements ContextMenuLaye
 	}
 
 	@Override
-	public void populateObjectContextMenu(Object o, ContextMenuAdapter adapter) {
-		if (o instanceof GPXUtilities.WptPt && plugin.getCurrentRoute() != null){
+	public void populateObjectContextMenu(LatLon latLon, Object o, ContextMenuAdapter adapter, MapActivity mapActivity) {
+		if (o != null && o instanceof GPXUtilities.WptPt && plugin.getCurrentRoute() != null){
 			final GPXUtilities.WptPt point = (GPXUtilities.WptPt) o;
 			ContextMenuAdapter.OnContextMenuClick listener = new ContextMenuAdapter.OnContextMenuClick() {
 				@Override
@@ -97,23 +110,33 @@ public class RoutePointsLayer  extends OsmandMapLayer implements ContextMenuLaye
 			};
 
 			if (plugin.getCurrentRoute().getPointStatus(point)){
-				adapter.item(R.string.mark_as_not_visited).iconColor(
-						R.drawable.ic_action_gremove_dark).listen(listener).reg();
+				adapter.addItem(new ContextMenuItem.ItemBuilder()
+						.setTitleId(R.string.mark_as_not_visited, mapActivity)
+						.setColorIcon(R.drawable.ic_action_gremove_dark)
+						.setListener(listener)
+						.createItem());
 			} else {
-				adapter.item(R.string.mark_as_visited).iconColor(
-						R.drawable.ic_action_done).listen(listener).reg();
+				adapter.addItem(new ContextMenuItem.ItemBuilder()
+						.setTitleId(R.string.mark_as_visited, mapActivity)
+						.setColorIcon(R.drawable.ic_action_done)
+						.setListener(listener)
+						.createItem());
 			}
 
 			RoutePointsPlugin.RoutePoint routePoint = plugin.getCurrentRoute().getRoutePointFromWpt(point);
 			if (routePoint != null) {
 				if (routePoint.isNextNavigate) {
-					adapter.item(R.string.navigate_to_next)
-							.iconColor(R.drawable.ic_action_gnext_dark).listen(listener)
-							.reg();
+					adapter.addItem(new ContextMenuItem.ItemBuilder()
+							.setTitleId(R.string.navigate_to_next, mapActivity)
+							.setColorIcon(R.drawable.ic_action_gnext_dark)
+							.setListener(listener)
+							.createItem());
 				} else {
-					adapter.item(R.string.mark_as_current)
-							.iconColor(R.drawable.ic_action_signpost_dark)
-							.listen(listener).reg();
+					adapter.addItem(new ContextMenuItem.ItemBuilder()
+							.setTitleId(R.string.mark_as_current, mapActivity)
+							.setColorIcon(R.drawable.ic_action_signpost_dark)
+							.setListener(listener)
+							.createItem());
 				}
 			}
 		}

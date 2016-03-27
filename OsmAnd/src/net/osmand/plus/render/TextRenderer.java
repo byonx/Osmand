@@ -29,13 +29,16 @@ import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
-import android.util.FloatMath;
 
 public class TextRenderer {
 
 	private Paint paintText;
 	private final Context context;
 	private Paint paintIcon;
+	private Typeface defaultTypeface;
+	private Typeface boldItalicTypeface;
+	private Typeface italicTypeface;
+	private Typeface boldTypeface;
 
 	static class TextDrawInfo {
 
@@ -56,7 +59,9 @@ public class TextRenderer {
 		int textShadow = 0;
 		int textWrap = 0;
 		boolean bold = false;
+		boolean italic = false;
 		String shieldRes = null;
+		String shieldResIcon = null;
 		int textOrder = 100;
 		int textShadowColor = Color.WHITE;
 
@@ -77,9 +82,13 @@ public class TextRenderer {
 			}
 			textWrap = (int) rc.getComplexValue(render, render.ALL.R_TEXT_WRAP_WIDTH);
 			bold = render.getIntPropertyValue(render.ALL.R_TEXT_BOLD, 0) > 0;
+			italic = render.getIntPropertyValue(render.ALL.R_TEXT_ITALIC, 0) > 0;
 			minDistance = rc.getComplexValue(render, render.ALL.R_TEXT_MIN_DISTANCE);
 			if (render.isSpecified(render.ALL.R_TEXT_SHIELD)) {
 				shieldRes = render.getStringPropertyValue(render.ALL.R_TEXT_SHIELD);
+			}
+			if (render.isSpecified(render.ALL.R_ICON)) {
+				shieldResIcon = render.getStringPropertyValue(render.ALL.R_ICON);
 			}
 			textOrder = render.getIntPropertyValue(render.ALL.R_TEXT_ORDER, 100);
 		}
@@ -92,11 +101,16 @@ public class TextRenderer {
 		paintText.setStrokeWidth(1);
 		paintText.setColor(Color.BLACK);
 		paintText.setTextAlign(Align.CENTER);
-		paintText.setTypeface(Typeface.create("Droid Serif", Typeface.NORMAL)); //$NON-NLS-1$
+		defaultTypeface = Typeface.create("Droid Serif", Typeface.NORMAL);
+		boldItalicTypeface = Typeface.create("Droid Serif", Typeface.BOLD_ITALIC);
+		italicTypeface = Typeface.create("Droid Serif", Typeface.ITALIC);
+		boldTypeface = Typeface.create("Droid Serif", Typeface.BOLD);
+		paintText.setTypeface(defaultTypeface); //$NON-NLS-1$
 		paintText.setAntiAlias(true);
 
 		paintIcon = new Paint();
 		paintIcon.setStyle(Style.STROKE);
+		
 	}
 
 	public Paint getPaintText() {
@@ -130,13 +144,13 @@ public class TextRenderer {
 		}
 
 		// determine difference close to 180/0 degrees
-		if (Math.abs(FloatMath.sin(tRot - sRot)) < 0.3) {
+		if (Math.abs(Math.sin(tRot - sRot)) < 0.3) {
 			// rotate t box
 			// (calculate offset for t center suppose we rotate around s center)
 			float diff = (float) (-Math.atan2(tRect.centerX() - sRect.centerX(), tRect.centerY() - sRect.centerY()) + Math.PI / 2);
 			diff -= sRot;
-			double left = sRect.centerX() + dist * FloatMath.cos(diff) - tRect.width() / 2;
-			double top = sRect.centerY() - dist * FloatMath.sin(diff) - tRect.height() / 2;
+			double left = sRect.centerX() + dist * Math.cos(diff) - tRect.width() / 2;
+			double top = sRect.centerY() - dist * Math.sin(diff) - tRect.height() / 2;
 			QuadRect nRect = new QuadRect(left, top, left + tRect.width(), top + tRect.height());
 			return QuadRect.intersects(nRect, sRect);
 		}
@@ -228,7 +242,17 @@ public class TextRenderer {
 				// sest text size before finding intersection (it is used there)
 				float textSize = text.textSize * rc.textScale ;
 				paintText.setTextSize(textSize);
+				if(text.bold && text.italic) {
+					paintText.setTypeface(boldItalicTypeface);
+				} else if(text.bold) {
+					paintText.setTypeface(boldTypeface);
+				} else if(text.italic) {
+					paintText.setTypeface(italicTypeface);
+				} else {
+					paintText.setTypeface(defaultTypeface);
+				}
 				paintText.setFakeBoldText(text.bold);
+				
 				paintText.setColor(text.textColor);
 				// align center y
 				text.centerY += (-paintText.ascent());
@@ -251,26 +275,31 @@ public class TextRenderer {
 						cv.drawTextOnPath(text.text, text.drawOnPath, 0, 
 								text.vOffset - ( paintText.ascent()/2 + paintText.descent()), paintText);
 					} else {
-						if (text.shieldRes != null) {
-							float coef = rc.getDensityValue(rc.screenDensityRatio * rc.textScale);
-							Bitmap ico = RenderingIcons.getIcon(context, text.shieldRes);
-							if (ico != null) {
-								float left = text.centerX - ico.getWidth() / 2 * coef - 0.5f;
-								float top = text.centerY - ico.getHeight() / 2 * coef -  paintText.descent() - 0.5f;
-								if(rc.screenDensityRatio != 1f){
-									RectF rf = new RectF(left, top, left + ico.getWidth() * coef, 
-											top + ico.getHeight() * coef);
-									Rect src = new Rect(0, 0, ico.getWidth(), ico
-											.getHeight());
-									cv.drawBitmap(ico, src, rf, paintIcon);
-								} else {
-									cv.drawBitmap(ico, left, top, paintIcon);
-								}
-							}
-						}
+						drawShieldIcon(rc, cv, text, text.shieldRes);
+						drawShieldIcon(rc, cv, text, text.shieldResIcon);
 
 						drawWrappedText(cv, text, textSize);
 					}
+				}
+			}
+		}
+	}
+
+	private void drawShieldIcon(RenderingContext rc, Canvas cv, TextDrawInfo text, String sr) {
+		if (sr != null) {
+			float coef = rc.getDensityValue(rc.screenDensityRatio * rc.textScale);
+			Bitmap ico = RenderingIcons.getIcon(context, sr, true);
+			if (ico != null) {
+				float left = text.centerX - ico.getWidth() / 2 * coef - 0.5f;
+				float top = text.centerY - ico.getHeight() / 2 * coef -  paintText.descent() - 0.5f;
+				if(rc.screenDensityRatio != 1f){
+					RectF rf = new RectF(left, top, left + ico.getWidth() * coef, 
+							top + ico.getHeight() * coef);
+					Rect src = new Rect(0, 0, ico.getWidth(), ico
+							.getHeight());
+					cv.drawBitmap(ico, src, rf, paintIcon);
+				} else {
+					cv.drawBitmap(ico, left, top, paintIcon);
 				}
 			}
 		}
@@ -333,7 +362,7 @@ public class TextRenderer {
 							String tagNameN2 = o.getMapIndex().decodeType(tagid).tag;
 							if (tagName2.equals(tagNameN2)) {
 								if (nname != null && nname.trim().length() > 0) {
-									text.text += " " + nname;
+									text.text += " (" + nname +")";
 								}
 								return false;
 							}
@@ -428,7 +457,7 @@ public class TextRenderer {
 			boolean inside = points[i].x >= 0 && points[i].x <= rc.width &&
 					points[i].x >= 0 && points[i].y <= rc.height;
 			if (i > 0) {
-				float d = FloatMath.sqrt(fsqr(points[i].x - points[i - 1].x) + 
+				float d = (float) Math.sqrt(fsqr(points[i].x - points[i - 1].x) + 
 						fsqr(points[i].y - points[i - 1].y));
 				distances[i-1]= d;
 				roadLength += d;

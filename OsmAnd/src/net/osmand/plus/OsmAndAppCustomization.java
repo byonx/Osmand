@@ -1,16 +1,10 @@
 package net.osmand.plus;
 
-import java.io.File;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import android.app.Activity;
 
 import net.osmand.IProgress;
 import net.osmand.IndexConstants;
-import net.osmand.Location;
 import net.osmand.data.LocationPoint;
-import net.osmand.plus.myplaces.FavoritesActivity;
-import net.osmand.plus.activities.MainMenuActivity;
 import net.osmand.plus.activities.MapActivity;
 import net.osmand.plus.activities.PluginsActivity;
 import net.osmand.plus.activities.SettingsActivity;
@@ -19,9 +13,14 @@ import net.osmand.plus.activities.search.SearchActivity;
 import net.osmand.plus.download.DownloadActivity;
 import net.osmand.plus.download.DownloadActivityType;
 import net.osmand.plus.helpers.WaypointHelper;
+import net.osmand.plus.myplaces.FavoritesActivity;
 import net.osmand.plus.routing.RouteCalculationResult;
 import net.osmand.plus.views.OsmandMapTileView;
-import android.app.Activity;
+
+import java.io.File;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 public class OsmAndAppCustomization {
 	
@@ -69,10 +68,6 @@ public class OsmAndAppCustomization {
 		return FavoritesActivity.class;
 	}
 
-	public Class<MainMenuActivity> getMainMenuActivity() {
-		return MainMenuActivity.class;
-	}
-	
 	public Class<? extends Activity> getDownloadIndexActivity() {
 		return DownloadActivity.class;
 	}
@@ -90,8 +85,6 @@ public class OsmAndAppCustomization {
 		
 	}
 
-	public void updatedLoadedFiles(Map<String, String> indexFileNames, Map<String, String> indexActivatedFileNames) {
-	}
 
 	public List<String> onIndexingFiles(IProgress progress, Map<String, String> indexFileNames) {
 		return Collections.emptyList();
@@ -103,8 +96,6 @@ public class OsmAndAppCustomization {
 	public void prepareOptionsMenu(MapActivity mapActivity, ContextMenuAdapter optionsMenuHelper) {
 	}
 
-	public void prepareLocationMenu(MapActivity mapActivity, ContextMenuAdapter adapter) {
-	}
 
 	public String getIndexesUrl() {
 		return "http://"+IndexConstants.INDEX_DOWNLOAD_DOMAIN+"/get_indexes?gzip&" + Version.getVersionAsURLParam(app); //$NON-NLS-1$;
@@ -114,9 +105,6 @@ public class OsmAndAppCustomization {
 		return true;
 	}
 
-	public boolean saveGPXPoint(Location location) {
-		return false;
-	}
 
 	public File getTracksDir() {
 		return app.getAppPath(IndexConstants.GPX_RECORDED_INDEX_DIR);
@@ -144,11 +132,6 @@ public class OsmAndAppCustomization {
 	
 	public boolean onDestinationReached() {
 		return true;
-	}
-
-
-	public File getExternalStorageDir() {
-		return osmandSettings.getExternalStorageDirectory();
 	}
 
 

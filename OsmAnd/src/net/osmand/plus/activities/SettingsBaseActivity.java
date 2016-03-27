@@ -1,21 +1,26 @@
 package net.osmand.plus.activities;
 
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-
-import android.graphics.PorterDuff;
-import android.graphics.drawable.Drawable;
-import android.preference.*;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.DialogInterface.OnMultiChoiceClickListener;
+import android.os.Bundle;
+import android.preference.CheckBoxPreference;
+import android.preference.EditTextPreference;
+import android.preference.ListPreference;
+import android.preference.Preference;
+import android.preference.Preference.OnPreferenceChangeListener;
+import android.preference.Preference.OnPreferenceClickListener;
+import android.preference.PreferenceGroup;
+import android.preference.PreferenceScreen;
+import android.support.v7.app.AlertDialog;
 import android.view.MenuItem;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.TextView;
+import android.widget.Toast;
+
 import net.osmand.access.AccessibleToast;
 import net.osmand.plus.ApplicationMode;
 import net.osmand.plus.OsmandApplication;
@@ -25,26 +30,24 @@ import net.osmand.plus.OsmandSettings.OsmandPreference;
 import net.osmand.plus.R;
 import net.osmand.plus.activities.actions.AppModeDialog;
 import net.osmand.plus.views.SeekBarPreference;
-import android.app.AlertDialog;
-import android.app.AlertDialog.Builder;
-import android.content.Context;
-import android.content.DialogInterface;
-import android.content.DialogInterface.OnMultiChoiceClickListener;
-import android.os.Bundle;
-import android.preference.Preference.OnPreferenceChangeListener;
-import android.preference.Preference.OnPreferenceClickListener;
-import android.view.View;
-import android.widget.ArrayAdapter;
-import android.widget.Toast;
+
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 
 
 public abstract class SettingsBaseActivity extends ActionBarPreferenceActivity
 		implements OnPreferenceChangeListener, OnPreferenceClickListener {
 
+	public static final String INTENT_APP_MODE = "INTENT_APP_MODE";
 
-	
 	protected OsmandSettings settings;
-	protected final boolean profileSettings ;
+	protected final boolean profileSettings;
 	protected List<ApplicationMode> modes = new ArrayList<ApplicationMode>();
 	private ApplicationMode previousAppMode; 
 
@@ -75,6 +78,17 @@ public abstract class SettingsBaseActivity extends ActionBarPreferenceActivity
 
 
 	public CheckBoxPreference createCheckBoxPreference(OsmandPreference<Boolean> b, int title, int summary) {
+		CheckBoxPreference p = new CheckBoxPreference(this);
+		p.setTitle(title);
+		p.setKey(b.getId());
+		p.setSummary(summary);
+		p.setOnPreferenceChangeListener(this);
+		screenPreferences.put(b.getId(), p);
+		booleanPreferences.put(b.getId(), b);
+		return p;
+	}
+	
+	public CheckBoxPreference createCheckBoxPreference(OsmandPreference<Boolean> b, String title, String summary) {
 		CheckBoxPreference p = new CheckBoxPreference(this);
 		p.setTitle(title);
 		p.setKey(b.getId());
@@ -156,6 +170,9 @@ public abstract class SettingsBaseActivity extends ActionBarPreferenceActivity
 	
 	public static String getStringPropertyValue(Context ctx, String propertyValue) {		
 		try {
+			if(propertyValue == null) {
+				return "";
+			}
 			final String propertyValueReplaced = propertyValue.replaceAll("\\s+","_");
 			Field f = R.string.class.getField("rendering_value_" + propertyValueReplaced + "_name");
 			if (f != null) {
@@ -224,7 +241,6 @@ public abstract class SettingsBaseActivity extends ActionBarPreferenceActivity
 		}
 	}
 	
-	@SuppressWarnings("unused")
 	private void registerDisablePreference(OsmandPreference p, String value, OsmandPreference<Boolean> disable) {
 		LinkedHashMap<String, Object> vals = (LinkedHashMap<String, Object>) listPrefValues.get(p.getId());
 		vals.put(value, disable);
@@ -286,7 +302,9 @@ public abstract class SettingsBaseActivity extends ActionBarPreferenceActivity
 			k++;
 		}
 		ListPreference lp = createListPreference(b, intDescriptions, ints, title, summary);
-		registerDisablePreference(b, getString(R.string.confirm_every_run), disable);
+		if(disable != null) {
+			registerDisablePreference(b, getString(R.string.confirm_every_run), disable);
+		}
 		return lp;
 	}
 
@@ -322,11 +340,10 @@ public abstract class SettingsBaseActivity extends ActionBarPreferenceActivity
 			for (ApplicationMode a : modes) {
 				s.add(a.toHumanString(getMyApplication()));
 			}
-
 			SpinnerAdapter spinnerAdapter = new SpinnerAdapter(this,
-					android.R.layout.simple_spinner_item, s);
-
-			spinnerAdapter.setDropDownViewResource(R.layout.support_simple_spinner_dropdown_item);
+					R.layout.spinner_item, s);
+//			android.R.layout.simple_spinner_dropdown_item
+			spinnerAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item);
 			getSpinner().setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
 				@Override
 				public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -339,7 +356,6 @@ public abstract class SettingsBaseActivity extends ActionBarPreferenceActivity
 
 				}
 			});
-
 			getSpinner().setAdapter(spinnerAdapter);
 			getSpinner().setVisibility(View.VISIBLE);
 		}
@@ -372,7 +388,14 @@ public abstract class SettingsBaseActivity extends ActionBarPreferenceActivity
 		super.onResume();
 		if (profileSettings) {
 			previousAppMode = settings.getApplicationMode();
-			boolean found = setSelectedAppMode(previousAppMode);
+			boolean found;
+			if (getIntent() != null && getIntent().hasExtra(INTENT_APP_MODE)) {
+				String modeStr = getIntent().getStringExtra(INTENT_APP_MODE);
+				ApplicationMode mode = ApplicationMode.valueOfStringKey(modeStr, previousAppMode);
+				found = setSelectedAppMode(mode);
+			} else {
+				found = setSelectedAppMode(previousAppMode);
+			}
 			if (!found) {
 				getSpinner().setSelection(0);
 			}
@@ -382,9 +405,9 @@ public abstract class SettingsBaseActivity extends ActionBarPreferenceActivity
 	}
 	
 	protected void profileDialog() {
-		Builder b = new AlertDialog.Builder(this);
+		AlertDialog.Builder b = new AlertDialog.Builder(this);
 		final Set<ApplicationMode> selected = new LinkedHashSet<ApplicationMode>();
-		View v = AppModeDialog.prepareAppModeView(this, selected, false, null, true,
+		View v = AppModeDialog.prepareAppModeView(this, selected, false, null, true, false,
 				new View.OnClickListener() {
 					@Override
 					public void onClick(View v) {
@@ -521,7 +544,7 @@ public abstract class SettingsBaseActivity extends ActionBarPreferenceActivity
 	
 
 	public void showBooleanSettings(String[] vals, final OsmandPreference<Boolean>[] prefs) {
-		Builder bld = new AlertDialog.Builder(this);
+		AlertDialog.Builder bld = new AlertDialog.Builder(this);
 		boolean[] checkedItems = new boolean[prefs.length];
 		for (int i = 0; i < prefs.length; i++) {
 			checkedItems[i] = prefs[i].get();

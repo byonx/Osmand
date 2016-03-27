@@ -20,6 +20,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map.Entry;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -66,15 +67,16 @@ public class BinaryInspector {
 		if(args.length == 1 && "test".equals(args[0])) {
 			in.inspector(new String[]{
 //				"-vpoi",
-				"-vmap",// "-vmapobjects", 
-//				"-vrouting",
-//				"-vaddress", "-vcities","-vstreetgroups", 
+				"-vmap","-vmapobjects", // "-vmapcoordinates", 
+				"-vrouting",
+//				"-vaddress", "-vcities",//"-vstreetgroups", 
 //				"-vstreets", "-vbuildings", "-vintersections", 
-				"-zoom=16",
+//				"-zoom=15",
 //				"-bbox=1.74,51.17,1.75,51.16",
-				"-vstats",
-				"/Users/victorshcherb/osmand/maps/Netherlands_europe_2.obf"
-//				"/Users/victorshcherb/osmand/maps/World_basemap_2.obf"
+//				"-vstats",
+//				"/Users/victorshcherb/osmand/maps/Synthetic_test_rendering.obf"
+//				"/Users/victorshcherb/osmand/maps/Netherlands_europe_2.road.obf"
+				"/Users/victorshcherb/osmand/maps/C_11_03_06.obf"
 					});
 		} else {
 			in.inspector(args);
@@ -118,6 +120,7 @@ public class BinaryInspector {
 		boolean vmap;
 		boolean vrouting;
 		boolean vmapObjects;
+		boolean vmapCoordinates;
 		boolean vstats;
 		boolean osm;
 		FileOutputStream osmOut = null;
@@ -177,6 +180,8 @@ public class BinaryInspector {
 					vrouting = true;
 				} else if(params[i].equals("-vmapobjects")){
 					vmapObjects = true;
+				} else if(params[i].equals("-vmapcoordinates")){
+					vmapCoordinates = true;
 				} else if(params[i].equals("-vpoi")){
 					vpoi = true;
 				} else if(params[i].startsWith("-osm")){
@@ -261,7 +266,7 @@ public class BinaryInspector {
 			printFileInformation(f);
 		}
 	}
-	public  static final void writeInt(CodedOutputStream ous, int v) throws IOException {
+	public static final void writeInt(CodedOutputStream ous, int v) throws IOException {
 		ous.writeRawByte((v >>> 24) & 0xFF);
 		ous.writeRawByte((v >>> 16) & 0xFF);
 		ous.writeRawByte((v >>>  8) & 0xFF);
@@ -287,7 +292,7 @@ public class BinaryInspector {
 				return null;
 			}
 			rafs[c] = new RandomAccessFile(f.getAbsolutePath(), "r");
-			indexes[c] = new BinaryMapIndexReader(rafs[c]);
+			indexes[c] = new BinaryMapIndexReader(rafs[c], f);
 			partsSet[c] = new LinkedHashSet<Float>();
 			if(version == -1){
 				version = indexes[c].getVersion();
@@ -400,7 +405,7 @@ public class BinaryInspector {
 	}
 
 
-	private  static void copyBinaryPart(CodedOutputStream ous, byte[] BUFFER, RandomAccessFile raf, long fp, int length)
+	public static void copyBinaryPart(CodedOutputStream ous, byte[] BUFFER, RandomAccessFile raf, long fp, int length)
 			throws IOException {
 		raf.seek(fp);
 		int toRead = length;
@@ -443,12 +448,13 @@ public class BinaryInspector {
 	
 	public void printFileInformation(File file) throws IOException {
 		RandomAccessFile r = new RandomAccessFile(file.getAbsolutePath(), "r");
-		printFileInformation(r, file.getName());
+		printFileInformation(r, file);
 	}
 
-	public  void printFileInformation(RandomAccessFile r, String filename) throws IOException {
+	public  void printFileInformation(RandomAccessFile r, File file ) throws IOException {
+		String filename = file.getName();
 		try {
-			BinaryMapIndexReader index = new BinaryMapIndexReader(r);
+			BinaryMapIndexReader index = new BinaryMapIndexReader(r, file);
 			int i = 1;
 			println("Binary index " + filename + " version = " + index.getVersion() +" edition = " + new Date(index.getDateCreated()));
 			for(BinaryIndexPart p : index.getIndexes()){
@@ -529,16 +535,15 @@ public class BinaryInspector {
 				b.setLength(0);
 				b.append("Road ");
 				b.append(obj.id);
-				for(int i = 0; i < obj.getTypes().length; i++) {
+				for (int i = 0; i < obj.getTypes().length; i++) {
 					RouteTypeRule rr = obj.region.quickGetEncodingRule(obj.getTypes()[i]);
 					b.append(" ").append(rr.getTag()).append("='").append(rr.getValue()).append("'");
 				}
-				if (obj.getNames() != null) {
-					TIntObjectIterator<String> it = obj.getNames().iterator();
-					while (it.hasNext()) {
-						it.advance();
-						RouteTypeRule rr = obj.region.quickGetEncodingRule(it.key());
-						b.append(" ").append(rr.getTag()).append("='").append(it.value()).append("'");
+				int[] nameIds = obj.getNameIds();
+				if (nameIds != null) {
+					for (int key : nameIds) {
+						RouteTypeRule rr = obj.region.quickGetEncodingRule(key);
+						b.append(" ").append(rr.getTag()).append("='").append(obj.getNames().get(key)).append("'");
 					}
 				}
 				println(b.toString());
@@ -564,6 +569,7 @@ public class BinaryInspector {
 			BinaryMapAddressReaderAdapter.VILLAGES_TYPE,
 			BinaryMapAddressReaderAdapter.POSTCODES_TYPE
 		};
+		String lang = "en";
 		
 		for (int j = 0; j < cityType.length; j++) {
 			int type = cityType[j];
@@ -585,7 +591,7 @@ public class BinaryInspector {
 				int size = index.preloadStreets(c, null);
 				List<Street> streets = new ArrayList<Street>(c.getStreets());
 				print(MessageFormat.format("\t\t''{0}'' [{1,number,#}], {2,number,#} street(s) size {3,number,#} bytes",
-						new Object[]{c.getEnName(), c.getId(), streets.size(), size}));
+						new Object[]{c.getName(lang), c.getId(), streets.size(), size}));
 				if(!verbose.vstreets)
 		        {
 					println("");
@@ -603,20 +609,20 @@ public class BinaryInspector {
 					final List<Street> intersections = t.getIntersectedStreets();
 				
 					println(MessageFormat.format("\t\t\t''{0}'' [{1,number,#}], {2,number,#} building(s), {3,number,#} intersections(s)",
-							new Object[]{t.getEnName(), t.getId(), buildings.size(), intersections.size()}));
+							new Object[]{t.getName(lang), t.getId(), buildings.size(), intersections.size()}));
 					
 					if (buildings != null && !buildings.isEmpty() && verbose.vbuildings) {
 						println("\t\t\t\tBuildings:");
 						for (Building b : buildings) {
 							println(MessageFormat.format("\t\t\t\t{0} [{1,number,#}]",
-									new Object[]{b.getName(true), b.getId()}));
+									new Object[]{b.getName(lang), b.getId()}));
 						}
 					}
 					
 					if (intersections != null && !intersections.isEmpty() && verbose.vintersections) {
 						print("\t\t\t\tIntersects with:");
 						for (Street s : intersections) {
-							println("\t\t\t\t\t" + s.getEnName());
+							println("\t\t\t\t\t" + s.getName(lang));
 						}
 					}
 				}
@@ -735,8 +741,12 @@ public class BinaryInspector {
 
 				@Override
 				public int compare(MapStatKey o1, MapStatKey o2) {
-					return -Long.compare(o1.statObjectSize, o2.statObjectSize);
+					return compare(o1.statObjectSize, o2.statObjectSize);
 				}
+				
+				public int compare(long x, long y) {
+			        return (x < y) ? -1 : ((x == y) ? 0 : 1);
+			    }
 			});
 			
 			for(MapStatKey s : stats) {
@@ -770,7 +780,7 @@ public class BinaryInspector {
 		final MapStats mapObjectStats = new MapStats();
 		if(vInfo.osm){
 			printToFile("<?xml version='1.0' encoding='UTF-8'?>\n" +
-					"<osm version='0.5'>\n");
+					"<osm version='0.6'>\n");
 		}
 		if(vInfo.isVStats()) {
 			BinaryMapIndexReader.READ_STATS = true;
@@ -802,8 +812,9 @@ public class BinaryInspector {
 								} catch (IOException e) {
 									throw new RuntimeException(e);
 								}
+//							} else if(obj.getId() >> 1 == 205743436l) {
 							} else {
-								printMapDetails(obj, b);
+								printMapDetails(obj, b, vInfo.vmapCoordinates);
 								println(b.toString());
 							}
 						}
@@ -829,7 +840,7 @@ public class BinaryInspector {
 
 	
 
-	private static void printMapDetails(BinaryMapDataObject obj, StringBuilder b) {
+	private static void printMapDetails(BinaryMapDataObject obj, StringBuilder b, boolean vmapCoordinates) {
 		boolean multipolygon = obj.getPolygonInnerCoordinates() != null && obj.getPolygonInnerCoordinates().length > 0;
 		if(multipolygon ) {
 			b.append("Multipolygon");
@@ -888,11 +899,13 @@ public class BinaryInspector {
 		}
 
 		b.append(" id ").append((obj.getId() >> 1));
-		b.append(" lat/lon : ");
-		for(int i=0; i<obj.getPointsLength(); i++) {
-			float x = (float) MapUtils.get31LongitudeX(obj.getPoint31XTile(i));
-			float y = (float) MapUtils.get31LatitudeY(obj.getPoint31YTile(i));
-			b.append(y).append(" / ").append(x).append(" , ");
+		if (vmapCoordinates) {
+			b.append(" lat/lon : ");
+			for (int i = 0; i < obj.getPointsLength(); i++) {
+				float x = (float) MapUtils.get31LongitudeX(obj.getPoint31XTile(i));
+				float y = (float) MapUtils.get31LatitudeY(obj.getPoint31YTile(i));
+				b.append(y).append(" / ").append(x).append(" , ");
+			}
 		}
 	}
 
@@ -939,7 +952,7 @@ public class BinaryInspector {
 		if(point) {
 			float lon= (float) MapUtils.get31LongitudeX(obj.getPoint31XTile(0));
 			float lat = (float) MapUtils.get31LatitudeY(obj.getPoint31YTile(0));
-			b.append("<node id = '" + OSM_ID++ + "' lat='" +lat+"' lon='"+lon+"' >\n" );
+			b.append("<node id = '" + OSM_ID++ + "' version='1' lat='" +lat+"' lon='"+lon+"' >\n" );
 			b.append(tags);
 			b.append("</node>\n");
 		} else {
@@ -949,7 +962,7 @@ public class BinaryInspector {
 				float lon = (float) MapUtils.get31LongitudeX(obj.getPoint31XTile(i));
 				float lat = (float) MapUtils.get31LatitudeY(obj.getPoint31YTile(i));
 				int id = OSM_ID++;
-				b.append("\t<node id = '" + id + "' lat='" +lat+"' lon='"+lon+"' />\n" );
+				b.append("\t<node id = '" + id + "' version='1' lat='" +lat+"' lon='"+lon+"' />\n" );
 				ids.add(id);
 			}
 			long outerId = printWay(ids, b, multipolygon ? null : tags);
@@ -961,13 +974,13 @@ public class BinaryInspector {
 						float lon = (float) MapUtils.get31LongitudeX(polygonInnerCoordinates[j][i]);
 						float lat = (float) MapUtils.get31LatitudeY(polygonInnerCoordinates[j][i + 1]);
 						int id = OSM_ID++;
-						b.append("<node id = '" + id + "' lat='" + lat + "' lon='" + lon + "' />\n");
+						b.append("<node id = '" + id + "' version='1' lat='" + lat + "' lon='" + lon + "' />\n");
 						ids.add(id);
 					}
 					innerIds.add(printWay(ids, b, null));
 				}
 				int id = OSM_ID++;
-				b.append("<relation id = '" + id + "'>\n" );
+				b.append("<relation id = '" + id + "' version='1'>\n" );
 				b.append(tags);
 				b.append("\t<member type='way' role='outer' ref= '" + outerId + "'/>\n" );
 				TLongIterator it = innerIds.iterator();
@@ -982,7 +995,7 @@ public class BinaryInspector {
 
 	private  long printWay(TLongArrayList ids, StringBuilder b , StringBuilder tags){
 		int id = OSM_ID++;
-		b.append("<way id = '" + id + "'>\n" );
+		b.append("<way id = '" + id + "' version='1'>\n" );
 		if(tags != null) {
 			b.append(tags);
 		}
@@ -1008,13 +1021,28 @@ public class BinaryInspector {
 					public boolean accept(PoiCategory type, String subcategory) {
 						return true;
 					}
+
+					@Override
+					public boolean isEmpty() {
+						return false;
+					}
 					
 				},
 				new ResultMatcher<Amenity>() {
 					@Override
 					public boolean publish(Amenity object) {
-						println(object.getType().getKeyName() + " : " + object.getSubType() + " " + object.getName() + " " + object.getLocation() + " id=" + (object.getId() >> 1) + " " +
-									object.getAdditionalInfo());
+						Iterator<Entry<String, String>> it = object.getAdditionalInfo().entrySet().iterator();
+						String s = "";
+						while(it.hasNext()) {
+							Entry<String, String> e = it.next();
+							if(e.getValue().startsWith(" gz ")) {
+								s += " " + e.getKey() +"=...";
+							} else {
+								s += " " + e.getKey() +"=" +e.getValue();
+							}
+						}
+						
+						println(object.getType().getKeyName() + " : " + object.getSubType() + " " + object.getName() + " " + object.getLocation() + " id=" + (object.getId() >> 1) + " " + s);
 						return false;
 					}
 					@Override
@@ -1038,7 +1066,7 @@ public class BinaryInspector {
 			PoiSubType st = p.subTypes.get(i);
 			println("\t\t\t" + st.name + " " + (st.text ? "text":(" encoded " + st.possibleValues.size())));
 		}
-		req.poiTypeFilter = null;//for test only
+//		req.poiTypeFilter = null;//for test only
 		index.searchPoi(p, req);
 		
 	}
@@ -1049,7 +1077,7 @@ public class BinaryInspector {
 		}
 		println("Inspector is console utility for working with binary indexes of OsmAnd.");
 		println("It allows print info about file, extract parts and merge indexes.");
-		println("\nUsage for print info : inspector [-vaddress] [-vstreetgroups] [-vstreets] [-vbuildings] [-vintersections] [-vmap] [-vmapobjects] [-osm] [-vpoi] [-vrouting] [-vtransport] [-zoom=Zoom] [-bbox=LeftLon,TopLat,RightLon,BottomLan] [file]");
+		println("\nUsage for print info : inspector [-vaddress] [-vstreetgroups] [-vstreets] [-vbuildings] [-vintersections] [-vmap] [-vmapobjects] [-vmapcoordinates] [-osm] [-vpoi] [-vrouting] [-vtransport] [-zoom=Zoom] [-bbox=LeftLon,TopLat,RightLon,BottomLat] [file]");
 		println("  Prints information about [file] binary index of OsmAnd.");
 		println("  -v.. more verbouse output (like all cities and their streets or all map objects with tags/values and coordinates)");
 		println("\nUsage for combining indexes : inspector -c file_to_create (file_from_extract ((+|-)parts_to_extract)? )*");

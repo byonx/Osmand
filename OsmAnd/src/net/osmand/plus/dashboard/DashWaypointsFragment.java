@@ -1,25 +1,9 @@
 package net.osmand.plus.dashboard;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
-import net.osmand.data.LatLon;
-import net.osmand.data.PointDescription;
-import net.osmand.plus.R;
-import net.osmand.plus.TargetPointsHelper;
-import net.osmand.plus.TargetPointsHelper.TargetPoint;
-import net.osmand.plus.activities.MapActivity;
-import net.osmand.plus.dashboard.DashboardOnMap.DashboardType;
-import net.osmand.plus.dialogs.DirectionsDialogs;
-import net.osmand.plus.helpers.WaypointDialogHelper;
-import net.osmand.plus.helpers.WaypointHelper;
-import net.osmand.plus.helpers.WaypointHelper.LocationPointWrapper;
-import android.app.AlertDialog;
-import android.app.AlertDialog.Builder;
 import android.content.DialogInterface;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.PopupMenu;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
@@ -31,17 +15,42 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import net.osmand.data.LatLon;
+import net.osmand.data.PointDescription;
+import net.osmand.plus.R;
+import net.osmand.plus.TargetPointsHelper;
+import net.osmand.plus.TargetPointsHelper.TargetPoint;
+import net.osmand.plus.activities.MapActivity;
+import net.osmand.plus.dashboard.DashboardOnMap.DashboardType;
+import net.osmand.plus.dashboard.tools.DashFragmentData;
+import net.osmand.plus.dialogs.DirectionsDialogs;
+import net.osmand.plus.helpers.WaypointDialogHelper;
+import net.osmand.plus.helpers.WaypointHelper;
+import net.osmand.plus.helpers.WaypointHelper.LocationPointWrapper;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /**
  */
 public class DashWaypointsFragment extends DashLocationFragment {
 	public static final String TAG = "DASH_WAYPOINTS_FRAGMENT";
+	public static final int TITLE_ID = R.string.waypoints;
 	List<TargetPoint> points = new ArrayList<TargetPoint>();
 	private static boolean SHOW_ALL;
+	public static final DashFragmentData.ShouldShowFunction SHOULD_SHOW_FUNCTION =
+			new DashboardOnMap.DefaultShouldShow() {
+				@Override
+				public int getTitleId() {
+					return TITLE_ID;
+				}
+			};
 
 	@Override
-	public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+	public View initView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
 		View view = getActivity().getLayoutInflater().inflate(R.layout.dash_common_fragment, container, false);
-		((TextView) view.findViewById(R.id.fav_text)).setText(getString(R.string.waypoints));
+		((TextView) view.findViewById(R.id.fav_text)).setText(getString(TITLE_ID));
 		
 		return view;
 	}
@@ -71,6 +80,7 @@ public class DashWaypointsFragment extends DashLocationFragment {
 		}		
 		((TextView) mainView.findViewById(R.id.fav_text)).setText(getString(R.string.waypoints));
 		((Button) mainView.findViewById(R.id.show_all)).setText(getString(R.string.shared_string_show_all));
+		((Button) mainView.findViewById(R.id.show_all)).setVisibility(View.VISIBLE);
 		((Button) mainView.findViewById(R.id.show_all)).setOnClickListener(new View.OnClickListener() {
 			
 			@Override
@@ -83,7 +93,10 @@ public class DashWaypointsFragment extends DashLocationFragment {
 		List<DashLocationView> distances = new ArrayList<DashLocationFragment.DashLocationView>();
 		for(int i = 0; i < 3 && i < allPoints.size(); i++) {
 			LocationPointWrapper ps = allPoints.get(i);
-			View v = WaypointDialogHelper.updateWaypointItemView(false, null, getMyApplication(), getActivity(), null, ps, null);
+			View dv = getActivity().getLayoutInflater().inflate(R.layout.divider, null);
+			favorites.addView(dv);
+			View v = WaypointDialogHelper.updateWaypointItemView(false, null, getMyApplication(),
+					getActivity(), null, null, ps, null, !getMyApplication().getSettings().isLightContent(), true);
 			favorites.addView(v);
 
 		}
@@ -129,7 +142,13 @@ public class DashWaypointsFragment extends DashLocationFragment {
 			view.findViewById(R.id.group_image).setVisibility(View.GONE);
 
 			boolean target = helper.getPointToNavigate() == point;
-			int id = target ? R.drawable.list_destination : R.drawable.list_intermediate;
+			int id;
+			if (!target) {
+				id = R.drawable.list_intermediate;
+			} else {
+				id = R.drawable.list_destination;
+			}
+
 			((ImageView) view.findViewById(R.id.favourite_icon)).setImageDrawable(getMyApplication().getIconsCache()
 					.getIcon(id, 0));
 			DashLocationView dv = new DashLocationView(direction, label, new LatLon(point.getLatitude(),
@@ -182,10 +201,10 @@ public class DashWaypointsFragment extends DashLocationFragment {
 	
 	protected void deletePointConfirm(final TargetPoint point, View view) {
 		final boolean target = point == getMyApplication().getTargetPointsHelper().getPointToNavigate();
-		Builder builder = new AlertDialog.Builder(view.getContext());
+		AlertDialog.Builder builder = new AlertDialog.Builder(view.getContext());
 		// Stop the navigation
-		builder.setTitle(getString(R.string.clear_destination));
-		builder.setMessage(getString(R.string.delete_target_point));
+		builder.setTitle(getString(R.string.delete_target_point));
+		builder.setMessage(PointDescription.getSimpleName(point, getActivity()));
 		builder.setPositiveButton(R.string.shared_string_yes, new DialogInterface.OnClickListener() {
 			@Override
 			public void onClick(DialogInterface dialog, int which) {
@@ -251,7 +270,7 @@ public class DashWaypointsFragment extends DashLocationFragment {
 			}
 		}
 		item = optionsMenu.getMenu().add(
-				R.string.shared_string_delete).setIcon(getMyApplication().getIconsCache().
+				R.string.shared_string_remove).setIcon(getMyApplication().getIconsCache().
 						getContentIcon(R.drawable.ic_action_remove_dark));
 		item.setOnMenuItemClickListener(new MenuItem.OnMenuItemClickListener() {
 			@Override
@@ -262,6 +281,4 @@ public class DashWaypointsFragment extends DashLocationFragment {
 		});
 		optionsMenu.show();
 	}
-
-
 }

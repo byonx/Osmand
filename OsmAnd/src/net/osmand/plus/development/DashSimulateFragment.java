@@ -1,11 +1,5 @@
 package net.osmand.plus.development;
 
-import net.osmand.plus.OsmAndLocationProvider;
-import net.osmand.plus.R;
-import net.osmand.plus.activities.MapActivity;
-import net.osmand.plus.dashboard.DashBaseFragment;
-import net.osmand.plus.helpers.FontCache;
-import android.graphics.Typeface;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.view.LayoutInflater;
@@ -17,11 +11,27 @@ import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-/**
- */
+import net.osmand.plus.OsmAndLocationProvider;
+import net.osmand.plus.R;
+import net.osmand.plus.dashboard.DashBaseFragment;
+import net.osmand.plus.dashboard.DashboardOnMap;
+import net.osmand.plus.dashboard.tools.DashFragmentData;
+
 public class DashSimulateFragment extends DashBaseFragment {
 
-	public static final String TAG = "DASH_SIMULATE_FRAGMENT";
+	private static final String TAG = "DASH_SIMULATE_FRAGMENT";
+	private static final int TITLE_ID = R.string.simulate_your_location;
+
+	private static final DashFragmentData.ShouldShowFunction SHOULD_SHOW_FUNCTION =
+			new DashboardOnMap.DefaultShouldShow() {
+				@Override
+				public int getTitleId() {
+					return TITLE_ID;
+				}
+			};
+	static final DashFragmentData FRAGMENT_DATA = new DashFragmentData(DashSimulateFragment.TAG,
+			DashSimulateFragment.class,
+			SHOULD_SHOW_FUNCTION, 150, null);
 
 	@Override
 	public void onOpenDash() {
@@ -36,10 +46,10 @@ public class DashSimulateFragment extends DashBaseFragment {
 	}
 
 	@Override
-	public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+	public View initView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
 		View view = getActivity().getLayoutInflater().inflate(R.layout.dash_common_fragment, container, false);
 		TextView header = (TextView) view.findViewById(R.id.fav_text);
-		header.setText(R.string.simulate_your_location);
+		header.setText(TITLE_ID);
 		((Button) view.findViewById(R.id.show_all)).setVisibility(View.GONE);
 		LinearLayout tracks = (LinearLayout) view.findViewById(R.id.items);
 		View item = inflater.inflate(R.layout.dash_simulate_item, null, false);
@@ -49,10 +59,8 @@ public class DashSimulateFragment extends DashBaseFragment {
 
 			@Override
 			public void onClick(View v) {
-				if (getActivity() instanceof MapActivity) {
-					loc.getLocationSimulation().startStopRouteAnimation((MapActivity) getActivity());
-					dashboard.hideDashboard();
-				}
+				loc.getLocationSimulation().startStopRouteAnimation(getActivity());
+				dashboard.hideDashboard();
 			}
 		};
 		item.setOnClickListener(listener);
@@ -62,5 +70,4 @@ public class DashSimulateFragment extends DashBaseFragment {
 
 		return view;
 	}
-
 }

@@ -3,14 +3,11 @@ package net.osmand.plus.osmedit;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PointF;
 
-import net.osmand.data.DataTileManager;
 import net.osmand.data.LatLon;
 import net.osmand.data.PointDescription;
-import net.osmand.data.QuadRect;
 import net.osmand.data.RotatedTileBox;
 import net.osmand.plus.R;
 import net.osmand.plus.activities.MapActivity;
@@ -18,6 +15,7 @@ import net.osmand.plus.views.ContextMenuLayer;
 import net.osmand.plus.views.OsmandMapLayer;
 import net.osmand.plus.views.OsmandMapTileView;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -32,9 +30,7 @@ public class OsmEditsLayer extends OsmandMapLayer implements ContextMenuLayer.IC
 	private Bitmap poi;
 	private Bitmap bug;
 	private OsmandMapTileView view;
-	private Paint pointAtUI;
 	private Paint paintIcon;
-	private Paint point;
 
 
 
@@ -47,20 +43,9 @@ public class OsmEditsLayer extends OsmandMapLayer implements ContextMenuLayer.IC
 	public void initLayer(OsmandMapTileView view) {
 		this.view = view;
 
-
-		pointAtUI = new Paint();
-		pointAtUI.setColor(0xa0FF3344);
-		pointAtUI.setStyle(Paint.Style.FILL);
-
-		poi = BitmapFactory.decodeResource(view.getResources(), R.drawable.map_pin_origin);
-		bug = BitmapFactory.decodeResource(view.getResources(), R.drawable.map_pin_destination);
-
+		poi = BitmapFactory.decodeResource(view.getResources(), R.drawable.map_pin_poi);
+		bug = BitmapFactory.decodeResource(view.getResources(), R.drawable.map_pin_poi);
 		paintIcon = new Paint();
-
-		point = new Paint();
-		point.setColor(Color.RED);
-		point.setAntiAlias(true);
-		point.setStyle(Paint.Style.STROKE);
 	}
 
 	@Override
@@ -71,23 +56,28 @@ public class OsmEditsLayer extends OsmandMapLayer implements ContextMenuLayer.IC
 	@Override
 	public void onPrepareBufferImage(Canvas canvas, RotatedTileBox tileBox, DrawSettings settings) {
 		if (tileBox.getZoom() >= startZoom) {
-			DataTileManager<OsmPoint> points = plugin.getLocalOsmEdits();
-			final QuadRect latlon = tileBox.getLatLonBounds();
-			List<OsmPoint> objects = points.getObjects(latlon. top, latlon.left, latlon.bottom, latlon.right);
-			for (OsmPoint o : objects) {
-				int x = (int) tileBox.getPixXFromLatLon(o.getLatitude(), o.getLongitude());
-				int y = (int) tileBox.getPixYFromLatLon(o.getLatitude(), o.getLongitude());
-				Bitmap b;
-				if (o.getGroup() == OsmPoint.Group.POI) {
-					b = poi;
-				} else if (o.getGroup() == OsmPoint.Group.BUG) {
-					b = bug;
-				} else {
-					b = poi;
+			List<LatLon> fullObjectsLatLon = new ArrayList<>();
+			drawPoints(canvas, tileBox, plugin.getDBBug().getOsmbugsPoints(), fullObjectsLatLon);
+			drawPoints(canvas, tileBox, plugin.getDBPOI().getOpenstreetmapPoints(), fullObjectsLatLon);
+			this.fullObjectsLatLon = fullObjectsLatLon;
+		}
+	}
 
-				}
-				canvas.drawBitmap(b, x - b.getWidth() / 2, y - b.getHeight(), paintIcon);
+	private void drawPoints(Canvas canvas, RotatedTileBox tileBox, List<? extends OsmPoint> objects,
+							List<LatLon> fullObjectsLatLon) {
+		for (OsmPoint o : objects) {
+			float x = tileBox.getPixXFromLatLon(o.getLatitude(), o.getLongitude());
+			float y = tileBox.getPixYFromLatLon(o.getLatitude(), o.getLongitude());
+			Bitmap b;
+			if (o.getGroup() == OsmPoint.Group.POI) {
+				b = poi;
+			} else if (o.getGroup() == OsmPoint.Group.BUG) {
+				b = bug;
+			} else {
+				b = poi;
 			}
+			canvas.drawBitmap(b, x - b.getWidth() / 2, y - b.getHeight() / 2, paintIcon);
+			fullObjectsLatLon.add(new LatLon(o.getLatitude(), o.getLongitude()));
 		}
 	}
 
@@ -98,7 +88,7 @@ public class OsmEditsLayer extends OsmandMapLayer implements ContextMenuLayer.IC
 
 	@Override
 	public boolean drawInScreenPixels() {
-		return false;
+		return true;
 	}
 
 
@@ -107,7 +97,13 @@ public class OsmEditsLayer extends OsmandMapLayer implements ContextMenuLayer.IC
 		int ey = (int) point.y;
 		int compare = getRadiusPoi(tileBox);
 		int radius = compare * 3 / 2;
-		for (OsmPoint n : plugin.getAllEdits()) {
+		compare = getFromPoint(tileBox, am, ex, ey, compare, radius, plugin.getDBBug().getOsmbugsPoints());
+		compare = getFromPoint(tileBox, am, ex, ey, compare, radius, plugin.getDBPOI().getOpenstreetmapPoints());
+	}
+
+	private int getFromPoint(RotatedTileBox tileBox, List<? super OsmPoint> am, int ex, int ey, int compare,
+			int radius, List<? extends OsmPoint> pnts) {
+		for (OsmPoint n : pnts) {
 			int x = (int) tileBox.getPixXFromLatLon(n.getLatitude(), n.getLongitude());
 			int y = (int) tileBox.getPixYFromLatLon(n.getLatitude(), n.getLongitude());
 			if (calculateBelongs(ex, ey, x, y, compare)) {
@@ -115,6 +111,7 @@ public class OsmEditsLayer extends OsmandMapLayer implements ContextMenuLayer.IC
 				am.add(n);
 			}
 		}
+		return compare;
 	}
 
 	private boolean calculateBelongs(int ex, int ey, int objx, int objy, int radius) {
@@ -132,8 +129,25 @@ public class OsmEditsLayer extends OsmandMapLayer implements ContextMenuLayer.IC
 	}
 
 	@Override
+	public boolean disableSingleTap() {
+		return false;
+	}
+
+	@Override
+	public boolean disableLongPressOnMap() {
+		return false;
+	}
+
+	@Override
+	public boolean isObjectClickable(Object o) {
+		return o instanceof OsmPoint;
+	}
+
+	@Override
 	public void collectObjectsFromPoint(PointF point, RotatedTileBox tileBox, List<Object> o) {
-		getOsmEditsFromPoint(point, tileBox, o);
+		if (tileBox.getZoom() >= startZoom) {
+			getOsmEditsFromPoint(point, tileBox, o);
+		}
 	}
 
 	@Override

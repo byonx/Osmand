@@ -5,6 +5,8 @@ import java.util.Comparator;
 import java.util.List;
 
 import net.osmand.ResultMatcher;
+import net.osmand.binary.BinaryMapIndexReader;
+import net.osmand.binary.GeocodingUtilities.GeocodingResult;
 import net.osmand.data.Building;
 import net.osmand.data.City;
 import net.osmand.data.LatLon;
@@ -17,6 +19,11 @@ public interface RegionAddressRepository {
 	
 	public String getName();
 	
+	public String getFileName() ;
+	
+	public String getLang();
+
+	
 	public LatLon getEstimatedRegionCenter();
 	
 	// is called on low memory
@@ -25,11 +32,6 @@ public interface RegionAddressRepository {
 	// called to close resources
 	public void close();
 	
-	public boolean useEnglishNames();
-	
-	public void setUseEnglishNames(boolean useEnglishNames);
-	
-
 	
 	public void preloadCities(ResultMatcher<City> resultMatcher);
 	
@@ -56,15 +58,16 @@ public interface RegionAddressRepository {
 	public List<MapObject> searchMapObjectsByName(String name, ResultMatcher<MapObject> resultMatcher);
 	
 	
+	public BinaryMapIndexReader getFile();
 	
 	public static class MapObjectNameDistanceComparator implements Comparator<MapObject> {
 		
-		private final boolean useEnName;
 		private Collator collator = Collator.getInstance();
 		private final LatLon location;
+		private final String lang;
 
-		public MapObjectNameDistanceComparator(boolean useEnName, LatLon location){
-			this.useEnName = useEnName;
+		public MapObjectNameDistanceComparator(String lang, LatLon location){
+			this.lang = lang;
 			this.location = location;
 		}
 
@@ -73,7 +76,7 @@ public interface RegionAddressRepository {
 			if(object1 == null || object2 == null){
 				return object2 == object1 ? 0 : (object1 == null ? -1 : 1); 
 			} else {
-				int c = collator.compare(object1.getName(useEnName), object2.getName(useEnName));
+				int c = collator.compare(object1.getName(lang), object2.getName(lang));
 				if(c == 0 && location != null){
 					LatLon l1 = object1.getLocation();
 					LatLon l2 = object2.getLocation();
@@ -86,5 +89,7 @@ public interface RegionAddressRepository {
 			}
 		}
 	}
+
+	public List<GeocodingResult> justifyReverseGeocodingSearch(GeocodingResult r, double minBuildingDistance, final ResultMatcher<GeocodingResult> result);
 
 }

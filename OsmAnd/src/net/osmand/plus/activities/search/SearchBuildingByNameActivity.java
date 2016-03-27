@@ -23,7 +23,6 @@ public class SearchBuildingByNameActivity extends SearchByNameAbstractActivity<B
 	private RegionAddressRepository region;
 	private City city;
 	private Street street;
-	private OsmandSettings osmandSettings;
 	
 	@Override
 	protected Comparator<? super Building> createComparator() {
@@ -98,10 +97,10 @@ public class SearchBuildingByNameActivity extends SearchByNameAbstractActivity<B
 		if(obj.getInterpolationInterval() > 0 || obj.getInterpolationType() != null){
 			String hno = getCurrentFilter();
 			if(hno.length() > 0 && obj.belongsToInterpolation(hno)) {
-				return hno + " [" + obj.getName(region.useEnglishNames())+"]";
+				return hno + " [" + obj.getName(region.getLang())+"]";
 			}
 		}
-		return obj.getName(region.useEnglishNames());
+		return obj.getName(region.getLang());
 	}
 	
 	@Override
@@ -124,7 +123,11 @@ public class SearchBuildingByNameActivity extends SearchByNameAbstractActivity<B
 			text = hno;
 		}
 		settings.setLastSearchedBuilding(text, loc);
-		quitActivity(null);
+		if(isSelectAddres()) {
+			finish();
+		} else {
+			showOnMap(loc, AddressInformation.buildBuilding(this, settings));
+		}
 	}
 	
 	@Override

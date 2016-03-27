@@ -6,6 +6,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.ref.WeakReference;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.UnknownHostException;
@@ -14,6 +15,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -46,7 +48,7 @@ public class MapTileDownloader {
 	
 	
 	private ThreadPoolExecutor threadPoolExecutor;
-	private List<IMapDownloaderCallback> callbacks = new ArrayList<IMapDownloaderCallback>();
+	private List<WeakReference<IMapDownloaderCallback>> callbacks = new LinkedList<WeakReference<IMapDownloaderCallback>>();
 	
 	private Set<File> pendingToDownload;
 	private Set<File> currentlyDownloaded;
@@ -89,6 +91,7 @@ public class MapTileDownloader {
 		public final int xTile;
 		public final int yTile;
 		public final String url;
+		public String referer = null;
 		public boolean error;
 		
 		public DownloadRequest(String url, File fileToSave, int xTile, int yTile, int zoom) {
@@ -157,15 +160,37 @@ public class MapTileDownloader {
 	}
 	
 	public void addDownloaderCallback(IMapDownloaderCallback callback){
-		callbacks.add(callback);
+		LinkedList<WeakReference<IMapDownloaderCallback>> ncall = new LinkedList<WeakReference<IMapDownloaderCallback>>(callbacks);
+		ncall.add(new WeakReference<MapTileDownloader.IMapDownloaderCallback>(callback));
+		callbacks = ncall;
 	}
 	
 	public void removeDownloaderCallback(IMapDownloaderCallback callback){
-		callbacks.remove(callback);
+		LinkedList<WeakReference<IMapDownloaderCallback>> ncall = new LinkedList<WeakReference<IMapDownloaderCallback>>(callbacks);
+		Iterator<WeakReference<IMapDownloaderCallback>> it = ncall.iterator();
+		while(it.hasNext()) {
+			IMapDownloaderCallback c = it.next().get();
+			if(c == callback) {
+				it.remove();
+			}
+		}
+		callbacks = ncall;
+	}
+	
+	
+	public void clearCallbacks() {
+		callbacks = new LinkedList<WeakReference<IMapDownloaderCallback>>();
 	}
 	
 	public List<IMapDownloaderCallback> getDownloaderCallbacks() {
-		return callbacks;
+		ArrayList<IMapDownloaderCallback> lst = new ArrayList<IMapDownloaderCallback>();
+		for(WeakReference<IMapDownloaderCallback> c : callbacks) {
+			IMapDownloaderCallback ct = c.get();
+			if(ct != null) {
+				lst.add(ct);
+			}
+		}
+		return lst;
 	}
 	
 	public boolean isFilePendingToDownload(File f){
@@ -238,6 +263,8 @@ public class MapTileDownloader {
 				try {
 					URLConnection connection = NetworkUtils.getHttpURLConnection(request.url);
 					connection.setRequestProperty("User-Agent", USER_AGENT); //$NON-NLS-1$
+					if(request.referer != null)
+						connection.setRequestProperty("Referer", request.referer); //$NON-NLS-1$
 					connection.setConnectTimeout(CONNECTION_TIMEOUT);
 					connection.setReadTimeout(CONNECTION_TIMEOUT);
 					BufferedInputStream inputStream = new BufferedInputStream(connection.getInputStream(), 8 * 1024);
@@ -259,9 +286,7 @@ public class MapTileDownloader {
 					currentlyDownloaded.remove(request.fileToSave);
 				}
 				if (!request.error) {
-					for (IMapDownloaderCallback c : new ArrayList<IMapDownloaderCallback>(callbacks)) {
-						c.tileDownloaded(request);
-					}
+					fireLoadCallback(request);
 				}
 			}
 				
@@ -272,5 +297,16 @@ public class MapTileDownloader {
 			return 0; //(int) (time - o.time);
 		}
 		
+	}
+
+
+	public void fireLoadCallback(DownloadRequest request) {
+		Iterator<WeakReference<IMapDownloaderCallback>> it = callbacks.iterator();
+		while(it.hasNext()) {
+			IMapDownloaderCallback c = it.next().get();
+			if(c != null) {
+				c.tileDownloaded(request);
+			}
+		}		
 	}
 }

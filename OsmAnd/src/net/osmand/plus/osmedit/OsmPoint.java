@@ -1,13 +1,14 @@
 package net.osmand.plus.osmedit;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
-public abstract class OsmPoint {
+public abstract class OsmPoint  implements Serializable {
 
 	public static enum Group {BUG, POI};
 
-	public static enum Action {CREATE, MODIFY, DELETE};
+	public static enum Action {CREATE, MODIFY, DELETE, REOPEN};
 
 	public static final Map<Action, String> stringAction = new HashMap<Action, String>();
 	public static final Map<String, Action> actionString = new HashMap<String, Action>();
@@ -15,9 +16,11 @@ public abstract class OsmPoint {
 		stringAction.put(Action.CREATE, "create");
 		stringAction.put(Action.MODIFY, "modify");
 		stringAction.put(Action.DELETE, "delete");
+		stringAction.put(Action.REOPEN, "reopen");
 
 		actionString.put("create", Action.CREATE);
 		actionString.put("modify", Action.MODIFY);
+		actionString.put("reopen", Action.REOPEN);
 		actionString.put("delete", Action.DELETE);
 	};
 

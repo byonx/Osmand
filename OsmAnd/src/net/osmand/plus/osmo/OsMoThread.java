@@ -1,5 +1,18 @@
 package net.osmand.plus.osmo;
 
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Looper;
+import android.os.Message;
+import android.widget.Toast;
+
+import net.osmand.PlatformUtil;
+import net.osmand.plus.osmo.OsMoService.SessionInfo;
+
+import org.apache.commons.logging.Log;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.InetSocketAddress;
@@ -12,37 +25,23 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.IllegalBlockSizeException;
-
-import net.osmand.PlatformUtil;
-import net.osmand.osm.io.Base64;
-import net.osmand.plus.osmo.OsMoService.SessionInfo;
-
-import org.apache.commons.logging.Log;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import android.os.Handler;
-import android.os.HandlerThread;
-import android.os.Message;
-
 public class OsMoThread {
 //	private static String TRACKER_SERVER = "srv.osmo.mobi";
 //	private static int TRACKER_PORT = 3245;
 
-	
+
 	private static final String PING_CMD = "P";
 	protected final static Log log = PlatformUtil.getLog(OsMoThread.class);
 	private static final long HEARTBEAT_DELAY = 100;
 	private static final long HEARTBEAT_FAILED_DELAY = 10000;
 	private static final long TIMEOUT_TO_RECONNECT = 60 * 1000;
+	private static final int SOCKET_TIMEOUT = 60 * 1000;
 	private static final long TIMEOUT_TO_PING = 5 * 60 * 1000;
 	private static final long LIMIT_OF_FAILURES_RECONNECT = 10;
 	private static final long SELECT_TIMEOUT = 500;
@@ -66,13 +65,13 @@ public class OsMoThread {
 	private String readCommand = "";
 	private ByteBuffer pendingReadCommand = ByteBuffer.allocate(2048);
 	private LinkedList<String> queueOfMessages = new LinkedList<String>();
-	
-	private SimpleDateFormat df = new SimpleDateFormat("HH:mm:ss");
-	
+
+	private SimpleDateFormat df = new SimpleDateFormat("HH:mm:ss", Locale.US);
+
 	private ConcurrentLinkedQueue<String> lastCommands = new ConcurrentLinkedQueue<String>();
 	private final static int STACK_CMD = 30;
-	
-	
+
+
 
 	public OsMoThread(OsMoService service) {
 		this.service = service;
@@ -106,6 +105,7 @@ public class OsMoThread {
 		activeChannel.configureBlocking(true);
 		activeChannel.connect(new InetSocketAddress(sessionInfo.hostName, Integer.parseInt(sessionInfo.port)));
 		activeChannel.configureBlocking(false);
+		activeChannel.socket().setSoTimeout(SOCKET_TIMEOUT);
 		SelectionKey key = activeChannel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 		connectionTime = System.currentTimeMillis();
 		if (this.activeChannel != null) {
@@ -118,7 +118,7 @@ public class OsMoThread {
 		}
 
 	}
-	
+
 	private Collection<OsMoReactor> getReactors() {
 		return service.getListReactors();
 	}
@@ -152,9 +152,9 @@ public class OsMoThread {
 	public boolean isConnected() {
 		return activeChannel != null;
 	}
-	
+
 	public boolean isActive() {
-		return activeChannel != null && pingSent == 0 && authorized == 2; 
+		return activeChannel != null && pingSent == 0 && authorized == 2;
 	}
 
 	protected void checkAsyncSocket() {
@@ -177,15 +177,25 @@ public class OsMoThread {
 			if (activeChannel != null && !activeChannel.isConnected()) {
 				activeChannel = null;
 			}
-			String msg = e.getMessage();
+			final String msg = e.getMessage();
 			for(OsMoReactor sender : getReactors()) {
 				sender.onDisconnected(msg);
 			}
 			delay = HEARTBEAT_FAILED_DELAY;
-			if(lastSendCommand != 0 && System.currentTimeMillis() - lastSendCommand > TIMEOUT_TO_RECONNECT  ) {
-				reconnect = true;
-			} else if (failures++ > LIMIT_OF_FAILURES_RECONNECT) {
-				reconnect = true;
+			if (e instanceof OsMoConnectionException) {
+				stopThread = true;
+				new Handler(Looper.getMainLooper()).post(new Runnable() {
+					@Override
+					public void run() {
+						Toast.makeText(service.getMyApplication(), msg, Toast.LENGTH_LONG).show();
+					}
+				});
+			} else {
+				if (lastSendCommand != 0 && System.currentTimeMillis() - lastSendCommand > TIMEOUT_TO_RECONNECT) {
+					reconnect = true;
+				} else if (failures++ > LIMIT_OF_FAILURES_RECONNECT) {
+					reconnect = true;
+				}
 			}
 		}
 		if (stopThread) {
@@ -267,15 +277,6 @@ public class OsMoThread {
 				while ((i = readCommand.indexOf('\n')) != -1) {
 					String cmd = readCommand.substring(0, i);
 					readCommand = readCommand.substring(i + 1);
-					if(sessionInfo != null && sessionInfo.clientDecCypher != null) {
-						try {
-							final byte[] inMsg = android.util.Base64.decode(cmd.getBytes(), android.util.Base64.DEFAULT);
-							final byte[] byts = sessionInfo.clientDecCypher.doFinal(inMsg);
-							cmd = new String(byts);
-						} catch (Exception e) {
-							exc("Error decrypting", e);
-						}
-					}
 					queueOfMessages.add(cmd.replace("\\n", "\n"));
 				}
 			}
@@ -311,7 +312,7 @@ public class OsMoThread {
 				} catch (JSONException e) {
 					e.printStackTrace();
 				}
-			} 
+			}
 			boolean error = false;
 			if(obj != null && obj.has("error")) {
 				error = true;
@@ -387,7 +388,7 @@ public class OsMoThread {
 			}
 		}
 	}
-	
+
 	public long getConnectionTime() {
 		return connectionTime;
 	}
@@ -398,7 +399,7 @@ public class OsMoThread {
 			cmd(auth, true);
 			authorized = 1;
 			pendingSendCommand =  ByteBuffer.wrap(prepareCommand(auth).toString().getBytes("UTF-8"));
-		} 
+		}
 		if (pendingSendCommand == null) {
 			pendingSendCommand = getNewPendingSendCommand();
 		}
@@ -412,8 +413,8 @@ public class OsMoThread {
 			}
 		}
 	}
-	
-	
+
+
 
 	private ByteBuffer getNewPendingSendCommand() throws UnsupportedEncodingException {
 		if(authorized == 1) {
@@ -430,7 +431,7 @@ public class OsMoThread {
 				cmd(l, true);
 				return ByteBuffer.wrap(prepareCommand(l).toString().getBytes("UTF-8"));
 			}
-			
+
 		}
 		final long interval = System.currentTimeMillis() - lastSendCommand;
 		if(interval > TIMEOUT_TO_PING) {
@@ -445,11 +446,11 @@ public class OsMoThread {
 		}
 		return null;
 	}
-	
+
 	public ConcurrentLinkedQueue<String> getLastCommands() {
 		return lastCommands;
 	}
-	
+
 	private void cmd(String cmd, boolean send) {
 		log.info("OsMO" + (send ? "> " : ">> ") + cmd);
 		lastCommands.add((send ? "> " : ">> ") + df.format(new Date()) + "  " + cmd);
@@ -471,15 +472,8 @@ public class OsMoThread {
 			}
 			res.append(c);
 		}
-		
+
 		String finalCmd = res.toString().trim();
-		if(sessionInfo != null && sessionInfo.clientEncCypher != null) {
-			try {
-				finalCmd = Base64.encode(sessionInfo.clientEncCypher.doFinal(finalCmd.getBytes()));
-			} catch (Exception e) {
-				exc("Error encrypting", e);
-			}
-		}
 		return finalCmd + "=\n";
 	}
 

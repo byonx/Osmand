@@ -1,12 +1,6 @@
 package net.osmand.plus.activities.actions;
 
-import net.osmand.access.AccessibleAlertBuilder;
-import net.osmand.plus.R;
-import net.osmand.plus.Version;
-import net.osmand.plus.activities.MapActivity;
-import net.osmand.plus.views.OsmandMapTileView;
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.DialogInterface;
@@ -16,6 +10,7 @@ import android.content.pm.PackageManager.NameNotFoundException;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.support.v7.app.AlertDialog;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
@@ -27,6 +22,12 @@ import android.widget.LinearLayout.LayoutParams;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import net.osmand.access.AccessibleAlertBuilder;
+import net.osmand.plus.R;
+import net.osmand.plus.Version;
+import net.osmand.plus.activities.MapActivity;
+import net.osmand.plus.views.OsmandMapTileView;
 
 public class StartGPSStatus extends OsmAndAction {
 
@@ -125,7 +126,7 @@ public class StartGPSStatus extends OsmAndAction {
 				View v = mapActivity.getLayoutInflater().inflate(layout, null);
 	            TextView tv = (TextView)v.findViewById(R.id.title);
 	            tv.setText(getItem(position).stringRes);		
-	            v.findViewById(R.id.check_item).setVisibility(View.INVISIBLE);
+	            v.findViewById(R.id.toggle_item).setVisibility(View.INVISIBLE);
 				return v;
 			}
 		};

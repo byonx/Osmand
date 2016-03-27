@@ -4,22 +4,19 @@ import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Comparator;
 
-import android.view.View;
-import android.widget.AdapterView;
 import net.osmand.access.AccessibleToast;
 import net.osmand.data.LatLon;
 import net.osmand.plus.OsmandApplication;
-import net.osmand.plus.OsmandSettings;
 import net.osmand.plus.R;
 import net.osmand.plus.helpers.FileNameTranslationHelper;
 import net.osmand.plus.resources.RegionAddressRepository;
-import android.app.Activity;
 import android.os.Bundle;
+import android.view.View;
+import android.widget.AdapterView;
 import android.widget.Toast;
 
 
 public class SearchRegionByNameActivity extends SearchByNameAbstractActivity<RegionAddressRepository> {
-	private OsmandSettings osmandSettings;
 
 	@Override
 	protected Comparator<? super RegionAddressRepository> createComparator() {
@@ -28,7 +25,7 @@ public class SearchRegionByNameActivity extends SearchByNameAbstractActivity<Reg
 			@Override
 			public int compare(RegionAddressRepository lhs,
 					RegionAddressRepository rhs) {
-				return col.compare(lhs.getName(), rhs.getName());
+				return col.compare(getText(lhs), getText(rhs));
 			}
 		};
 	}
@@ -44,6 +41,7 @@ public class SearchRegionByNameActivity extends SearchByNameAbstractActivity<Reg
 	protected LatLon getLocation(RegionAddressRepository item) {
 		return item.getEstimatedRegionCenter();
 	}
+	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -60,12 +58,17 @@ public class SearchRegionByNameActivity extends SearchByNameAbstractActivity<Reg
 	@Override
 	public String getText(RegionAddressRepository obj) {
 		return FileNameTranslationHelper.getFileName(this,
-				getMyApplication().getResourceManager().getOsmandRegions(), obj.getName());
+				getMyApplication().getResourceManager().getOsmandRegions(), obj.getFileName());
+	}
+	
+	@Override
+	public String getAdditionalFilterText(RegionAddressRepository obj) {
+		return obj.getName();
 	}
 
 	@Override
 	public void itemSelected(RegionAddressRepository obj) {
-		((OsmandApplication) getApplication()).getSettings().setLastSearchedRegion(obj.getName(), obj.getEstimatedRegionCenter());
+		((OsmandApplication) getApplication()).getSettings().setLastSearchedRegion(obj.getFileName(), obj.getEstimatedRegionCenter());
 		quitActivity(SearchCityByNameActivity.class);
 	}
 

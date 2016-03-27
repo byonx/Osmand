@@ -6,7 +6,7 @@ import android.content.Context;
 
 public class FavouritePoint implements Serializable, LocationPoint {
 	private static final long serialVersionUID = 729654300829771466L;
-	private String name;
+	private String name = "";
 	private String description;
 	private String category = "";
 	private double latitude;
@@ -21,9 +21,22 @@ public class FavouritePoint implements Serializable, LocationPoint {
 		this.latitude = latitude;
 		this.longitude = longitude;
 		this.category = category;
+		if(name == null) {
+			name = "";
+		}
 		this.name = name;
 	}
-	
+
+	public FavouritePoint(FavouritePoint favouritePoint) {
+		this.latitude = favouritePoint.latitude;
+		this.longitude = favouritePoint.longitude;
+		this.category = favouritePoint.category;
+		this.name = favouritePoint.name;
+		this.color = favouritePoint.color;
+		this.description = favouritePoint.description;
+		this.visible = favouritePoint.visible;
+	}
+
 	public int getColor() {
 		return color;
 	}

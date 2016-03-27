@@ -1,14 +1,6 @@
 package net.osmand.plus.rastermaps;
 
 
-import java.util.Map;
-
-import net.osmand.ResultMatcher;
-import net.osmand.map.TileSourceManager.TileSourceTemplate;
-import net.osmand.plus.OsmandApplication;
-import net.osmand.plus.R;
-import net.osmand.plus.activities.SettingsBaseActivity;
-import net.osmand.plus.views.SeekBarPreference;
 import android.os.Bundle;
 import android.preference.CheckBoxPreference;
 import android.preference.ListPreference;
@@ -16,6 +8,15 @@ import android.preference.Preference;
 import android.preference.Preference.OnPreferenceChangeListener;
 import android.preference.PreferenceCategory;
 import android.preference.PreferenceScreen;
+
+import net.osmand.ResultMatcher;
+import net.osmand.map.TileSourceManager.TileSourceTemplate;
+import net.osmand.plus.OsmandApplication;
+import net.osmand.plus.R;
+import net.osmand.plus.activities.SettingsBaseActivity;
+import net.osmand.plus.views.SeekBarPreference;
+
+import java.util.Map;
 
 public class SettingsRasterMapsActivity extends SettingsBaseActivity {
 
@@ -30,57 +31,41 @@ public class SettingsRasterMapsActivity extends SettingsBaseActivity {
     public void onCreate(Bundle savedInstanceState) {
 		((OsmandApplication) getApplication()).applyTheme(this);
 		super.onCreate(savedInstanceState);
-		getToolbar().setTitle(R.string.online_map_settings);
+		getToolbar().setTitle(R.string.shared_string_online_maps);
 		PreferenceScreen grp = getPreferenceScreen();
 		OnPreferenceChangeListener listener = createPreferenceListener();
 		
 		PreferenceCategory cat = new PreferenceCategory(this);
 		cat.setTitle(R.string.pref_raster_map);
 		grp.addPreference(cat);
-		
-		CheckBoxPreference mapVectorData = createCheckBoxPreference(settings.MAP_ONLINE_DATA,
-				R.string.map_online_data, R.string.map_online_data_descr);
-//		final OnPreferenceChangeListener parent = mapVectorData.getOnPreferenceChangeListener();
-//		MapRenderRepositories r = app.getResourceManager().getRenderer();
-//		if(r.isEmpty()){
-//			AccessibleToast.makeText(this, getString(R.string.no_vector_map_loaded), Toast.LENGTH_LONG).show();
-//			return false;
-//		}
-		cat.addPreference(mapVectorData);
-		
-		tileSourcePreference = new ListPreference(this);
-		tileSourcePreference.setSummary(R.string.map_tile_source_descr);
-		tileSourcePreference.setTitle(R.string.map_tile_source);
-		tileSourcePreference.setOnPreferenceChangeListener(listener);
-		cat.addPreference(tileSourcePreference);
+	
+		// present on configure map
+//		addTileSourcePrefs(listener, cat);
 		
 		cat.addPreference(createCheckBoxPreference(settings.USE_INTERNET_TO_DOWNLOAD_TILES, 
 				R.string.use_internet, R.string.use_internet_to_download_tile));
 		
-		int startZoom = 1;
-		int endZoom = 18;
-		String[] entries = new String[endZoom - startZoom + 1];
-		Integer[] intValues = new Integer[endZoom - startZoom + 1];
-		for (int i = startZoom; i <= endZoom; i++) {
-			entries[i - startZoom] = i + ""; //$NON-NLS-1$
-			intValues[i - startZoom] = i ;
-		}
-		ListPreference lp = createListPreference(settings.LEVEL_TO_SWITCH_VECTOR_RASTER, 
-				entries, intValues, R.string.level_to_switch_vector_raster, R.string.level_to_switch_vector_raster_descr);
-		cat.addPreference(lp);
-		
-		// try without, Issue 823:
-//		int startZoom = 12;
-//		int endZoom = 19;
-//		entries = new String[endZoom - startZoom + 1];
+//		int startZoom = 1;
+//		int endZoom = 18;
+//		String[] entries = new String[endZoom - startZoom + 1];
 //		Integer[] intValues = new Integer[endZoom - startZoom + 1];
 //		for (int i = startZoom; i <= endZoom; i++) {
 //			entries[i - startZoom] = i + ""; //$NON-NLS-1$
 //			intValues[i - startZoom] = i ;
 //		}
-		// registerListPreference(osmandosmandSettings.MAX_LEVEL_TO_DOWNLOAD_TILE, screen, entries, intValues);
+//		ListPreference lp = createListPreference(settings.LEVEL_TO_SWITCH_VECTOR_RASTER, 
+//				entries, intValues, R.string.level_to_switch_vector_raster, R.string.level_to_switch_vector_raster_descr);
+//		cat.addPreference(lp);
+
+		// present on configure map
+//		addOverlayPrefs(grp, listener);
 		
-		
+    }
+
+
+	@SuppressWarnings("unused")
+	private void addOverlayPrefs(PreferenceScreen grp, OnPreferenceChangeListener listener) {
+		PreferenceCategory cat;
 		cat = new PreferenceCategory(this);
 		cat.setTitle(R.string.pref_overlay);
 		grp.addPreference(cat);
@@ -102,8 +87,21 @@ public class SettingsRasterMapsActivity extends SettingsBaseActivity {
 		sp = createSeekBarPreference(settings.MAP_TRANSPARENCY, R.string.map_transparency, R.string.map_transparency_descr,
 				R.string.modify_transparency, 0, 255);
 		cat.addPreference(sp);
+	}
+
+
+	@SuppressWarnings("unused")
+	private void addTileSourcePrefs(OnPreferenceChangeListener listener, PreferenceCategory cat) {
+		CheckBoxPreference mapVectorData = createCheckBoxPreference(settings.MAP_ONLINE_DATA,
+				R.string.map_online_data, R.string.map_online_data_descr);
+		cat.addPreference(mapVectorData);
 		
-    }
+		tileSourcePreference = new ListPreference(this);
+		tileSourcePreference.setSummary(R.string.map_tile_source_descr);
+		tileSourcePreference.setTitle(R.string.map_tile_source);
+		tileSourcePreference.setOnPreferenceChangeListener(listener);
+		cat.addPreference(tileSourcePreference);
+	}
 
 
 	public void updateAllSettings() {

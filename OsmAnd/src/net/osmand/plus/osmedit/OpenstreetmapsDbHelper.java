@@ -1,15 +1,17 @@
 package net.osmand.plus.osmedit;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map.Entry;
-
-import net.osmand.osm.edit.Node;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+
+import net.osmand.osm.edit.Node;
+import net.osmand.util.Algorithms;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map.Entry;
 
 public class OpenstreetmapsDbHelper extends SQLiteOpenHelper {
 
@@ -27,7 +29,7 @@ public class OpenstreetmapsDbHelper extends SQLiteOpenHelper {
 			OPENSTREETMAP_COL_LAT + " double," + OPENSTREETMAP_COL_LON + " double," +
 			OPENSTREETMAP_COL_TAGS + " VARCHAR(2048)," +
 			OPENSTREETMAP_COL_ACTION + " TEXT, " + OPENSTREETMAP_COL_COMMENT + " TEXT);"; //$NON-NLS-1$ //$NON-NLS-2$ 
-	
+	List<OpenstreetmapPoint> cache = null; 	
 
 	public OpenstreetmapsDbHelper(Context context) {
 		super(context, OPENSTREETMAP_DB_NAME, null, DATABASE_VERSION);
@@ -47,26 +49,35 @@ public class OpenstreetmapsDbHelper extends SQLiteOpenHelper {
 	}
 
 	public List<OpenstreetmapPoint> getOpenstreetmapPoints() {
-		return checkOpenstreetmapPoints();
+		if(cache == null ) {
+			return checkOpenstreetmapPoints();
+		}
+		return cache;
 	}
 	
 	public boolean addOpenstreetmap(OpenstreetmapPoint p) {
-		checkOpenstreetmapPoints();
 		SQLiteDatabase db = getWritableDatabase();
 		if (db != null) {
 			StringBuilder tags = new StringBuilder();
 			Iterator<Entry<String, String>> eit = p.getEntity().getTags().entrySet().iterator();
 			while(eit.hasNext()) {
 				Entry<String, String> e = eit.next();
+				if(Algorithms.isEmpty(e.getKey()) || Algorithms.isEmpty(e.getValue())) {
+					continue;
+				}
 				tags.append(e.getKey()).append("$$$").append(e.getValue());
 				if(eit.hasNext()) {
 					tags.append("$$$");
 				}
 			}
+			db.execSQL("DELETE FROM " + OPENSTREETMAP_TABLE_NAME +
+					" WHERE " + OPENSTREETMAP_COL_ID + " = ?", new Object[] { p.getId() }); //$NON-NLS-1$ //$NON-NLS-2$
 			db.execSQL("INSERT INTO " + OPENSTREETMAP_TABLE_NAME +
 					" (" + OPENSTREETMAP_COL_ID + ", " + OPENSTREETMAP_COL_LAT + ", " + OPENSTREETMAP_COL_LON + ", " + OPENSTREETMAP_COL_TAGS + ", " + OPENSTREETMAP_COL_ACTION + "," + OPENSTREETMAP_COL_COMMENT + ")" +
 					   " VALUES (?, ?, ?, ?, ?, ?)",
 					   new Object[] { p.getId(),p.getLatitude(), p.getLongitude(), tags.toString() , OsmPoint.stringAction.get(p.getAction()), p.getComment(),  }); //$NON-NLS-1$ //$NON-NLS-2$
+			db.close();
+			checkOpenstreetmapPoints();
 			return true;
 		}
 		return false;
@@ -75,11 +86,12 @@ public class OpenstreetmapsDbHelper extends SQLiteOpenHelper {
 	
 	
 	public boolean deletePOI(OpenstreetmapPoint p) {
-		checkOpenstreetmapPoints();
 		SQLiteDatabase db = getWritableDatabase();
 		if (db != null) {
 			db.execSQL("DELETE FROM " + OPENSTREETMAP_TABLE_NAME +
 					" WHERE " + OPENSTREETMAP_COL_ID + " = ?", new Object[] { p.getId() }); //$NON-NLS-1$ //$NON-NLS-2$
+			db.close();
+			checkOpenstreetmapPoints();
 			return true;
 		}
 		return false;
@@ -87,8 +99,8 @@ public class OpenstreetmapsDbHelper extends SQLiteOpenHelper {
 	
 
 	private List<OpenstreetmapPoint> checkOpenstreetmapPoints(){
-		SQLiteDatabase db = getWritableDatabase();
-		List<OpenstreetmapPoint> cachedOpenstreetmapPoints = new ArrayList<OpenstreetmapPoint>();
+		SQLiteDatabase db = getReadableDatabase();
+		List<OpenstreetmapPoint> points = new ArrayList<OpenstreetmapPoint>();
 		if (db != null) {
 			Cursor query = db.rawQuery("SELECT " + OPENSTREETMAP_COL_ID + ", " + OPENSTREETMAP_COL_LAT + "," + OPENSTREETMAP_COL_LON + "," + OPENSTREETMAP_COL_ACTION + "," + OPENSTREETMAP_COL_COMMENT + "," + OPENSTREETMAP_COL_TAGS+ " FROM " + //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$ 
 					OPENSTREETMAP_TABLE_NAME, null);
@@ -106,12 +118,13 @@ public class OpenstreetmapsDbHelper extends SQLiteOpenHelper {
 					p.setEntity(entity);
 					p.setAction(query.getString(3));
 					p.setComment(query.getString(4));
-					cachedOpenstreetmapPoints.add(p);
+					points.add(p);
 				} while (query.moveToNext());
 			}
 			query.close();
 		}
-		return cachedOpenstreetmapPoints;
+		cache = points;
+		return points;
 	}
 
 	public long getMinID() {

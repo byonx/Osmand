@@ -25,6 +25,7 @@ import android.graphics.Color;
 public class OsMoGroupsStorage {
 	private static final String GROUPS = "groups";
 	private static final String USERS = "users";
+	private static final String TRACKS = "tracks";
 	private static final String SERVER_NAME = "serverName";
 	private static final String GROUP_ID = "group_id";
 	private static final String TRACKER_ID = "trackerId";
@@ -42,39 +43,21 @@ public class OsMoGroupsStorage {
 	private OsmandPreference<String> pref;
 	private OsMoGroups service;
 	private ConcurrentHashMap<String, OsMoGroup> groups = new ConcurrentHashMap<String, OsMoGroup>();
-	private OsMoGroup mainGroup;
 
 	public OsMoGroupsStorage(OsMoGroups service, OsmandPreference<String> pref) {
 		this.service = service;
 		this.pref = pref;
-		mainGroup = new OsMoGroup();
-		groups.put("", mainGroup);
-	}
-	
-	public OsMoGroup getMainGroup() {
-		return mainGroup;
 	}
 	
 	public Collection<OsMoGroup> getGroups() {
 		return groups.values();
 	}
 	
-	public void loadOnlyMainGroup() {
-		String grp = pref.get();
-		try {
-			JSONObject obj = new JSONObject(grp);
-			parseGroupUsers(mainGroup, obj);
-		} catch (JSONException e) {
-			e.printStackTrace();
-			service.showErrorMessage(e.getMessage());
-		}
-	}
 
 	public void load() {
 		String grp = pref.get();
 		try {
 			JSONObject obj = new JSONObject(grp);
-			parseGroupUsers(mainGroup, obj);
 			if(!obj.has(GROUPS)) {
 				return;
 			}
@@ -102,6 +85,7 @@ public class OsMoGroupsStorage {
 					group.enabled = true;
 				}
 				parseGroupUsers(group, o);
+//				parseGroupTracks(group, obj);
 				this.groups.put(group.groupId, group);
 			}
 		} catch (JSONException e) {
@@ -113,7 +97,6 @@ public class OsMoGroupsStorage {
 	public void save() {
 		JSONObject mainObj = new JSONObject();
 		try {
-			saveGroupUsers(mainGroup, mainObj);
 			JSONArray ar = new JSONArray();
 			for(OsMoGroup gr : groups.values()) {
 				if(gr.isMainGroup()) {
@@ -141,6 +124,7 @@ public class OsMoGroupsStorage {
 				obj.put(GROUP_ID, gr.groupId);
 				ar.put(obj);
 				saveGroupUsers(gr, obj);
+				saveGroupTracks(gr, obj);
 			}
 			mainObj.put(GROUPS, ar);
 		} catch (JSONException e) {
@@ -181,8 +165,20 @@ public class OsMoGroupsStorage {
 		}
 		grObj.put(USERS, ar);
 	}
+	
+	private void saveGroupTracks(OsMoGroup gr, JSONObject grObj) throws JSONException {
+		if (gr.groupTracks.size() > 0) {
+			JSONArray ar = new JSONArray();
+			for (String u : gr.groupTracks) {
+				JSONObject obj = new JSONObject();
+				obj.put(NAME, u);
+				ar.put(obj);
+			}
+			grObj.put(TRACKS, ar);
+		}
+	}
 
-	private void parseGroupUsers(OsMoGroup gr, JSONObject obj) throws JSONException {
+	protected void parseGroupUsers(OsMoGroup gr, JSONObject obj) throws JSONException {
 		if(!obj.has(USERS)) {
 			return;
 		}
@@ -216,6 +212,19 @@ public class OsMoGroupsStorage {
 			gr.users.put(user.trackerId, user);
 		}
 	}
+	
+	protected void parseGroupTracks(OsMoGroup gr, JSONObject obj) throws JSONException {
+		if(!obj.has(TRACKS)) {
+			return;
+		}
+		JSONArray tracks = obj.getJSONArray(TRACKS);
+		for (int i = 0; i < tracks.length(); i++) {
+			JSONObject o = (JSONObject) tracks.get(i);
+			if(o.has(NAME)) {
+				gr.groupTracks.add(NAME);
+			}
+		}
+	}
 
 	public static class OsMoGroup {
 		protected String name;
@@ -228,7 +237,8 @@ public class OsMoGroupsStorage {
 		protected boolean active;
 		protected boolean deleted;
 		
-		protected Map<String, OsMoDevice> users = new ConcurrentHashMap<String, OsMoDevice>(); 
+		protected Map<String, OsMoDevice> users = new ConcurrentHashMap<String, OsMoDevice>();
+		protected List<String> groupTracks = new ArrayList<String>();
 		
 		public List<OsMoDevice> getGroupUsers(String mygid) {
 			// filter deleted
@@ -244,8 +254,12 @@ public class OsMoGroupsStorage {
 			return dvs;
 		}
 		
+		public List<String> getGroupTracks() {
+			return groupTracks;
+		}
+		
 		public List<OsMoDevice> getVisibleGroupUsers(String mygid) {
-			if(!isActive() &&  !isMainGroup()) {
+			if(!isActive() && !isMainGroup()) {
 				return Collections.emptyList();
 			}
 			return getGroupUsers(mygid);
@@ -460,7 +474,7 @@ public class OsMoGroupsStorage {
 		}
 		for (String id: toDelete) {
 			OsMoGroup group = getGroup(id); 
-			if ((group != null) && (!group.equals(mainGroup))) {
+			if (group != null) {
 				deleteGroup(group);
 			}
 		}
@@ -468,7 +482,6 @@ public class OsMoGroupsStorage {
 	
 	public void clearGroups() {
 		groups.clear();
-		groups.put("", mainGroup);
 	}
 	
 }

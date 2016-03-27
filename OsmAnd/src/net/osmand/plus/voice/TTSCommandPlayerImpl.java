@@ -1,28 +1,6 @@
 package net.osmand.plus.voice;
 
-import java.io.File;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-
-import android.app.Notification;
-import android.app.PendingIntent;
-import android.support.v4.app.NotificationCompat;
-import android.support.v4.app.NotificationManagerCompat;
-import net.osmand.PlatformUtil;
-import net.osmand.plus.OsmandApplication;
-import net.osmand.plus.R;
-import net.osmand.plus.activities.SettingsActivity;
-import net.osmand.util.Algorithms;
-
-import org.apache.commons.logging.Log;
-import org.json.JSONArray;
-import org.json.JSONObject;
-
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.app.AlertDialog.Builder;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -30,6 +8,24 @@ import android.net.Uri;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.TextToSpeech.OnInitListener;
 import android.speech.tts.TextToSpeech.OnUtteranceCompletedListener;
+import android.support.v7.app.AlertDialog;
+
+import net.osmand.PlatformUtil;
+import net.osmand.plus.OsmandApplication;
+import net.osmand.plus.R;
+import net.osmand.plus.activities.SettingsActivity;
+import net.osmand.plus.routing.VoiceRouter;
+import net.osmand.util.Algorithms;
+
+import org.apache.commons.logging.Log;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 
 public class TTSCommandPlayerImpl extends AbstractPrologCommandPlayer {
@@ -69,10 +65,12 @@ public class TTSCommandPlayerImpl extends AbstractPrologCommandPlayer {
 	private TextToSpeech mTts;
 	private Context mTtsContext;
 	private HashMap<String, String> params = new HashMap<String, String>();
+	private VoiceRouter vrt;
 
-	protected TTSCommandPlayerImpl(Activity ctx, String voiceProvider)
+	public TTSCommandPlayerImpl(Activity ctx, VoiceRouter vrt, String voiceProvider)
 			throws CommandPlayerException {
 		super((OsmandApplication) ctx.getApplicationContext(), voiceProvider, CONFIG_FILE, TTS_VOICE_VERSION);
+		this.vrt = vrt;
 		if (Algorithms.isEmpty(language)) {
 			throw new CommandPlayerException(
 					ctx.getString(R.string.voice_data_corrupted));
@@ -100,20 +98,21 @@ public class TTSCommandPlayerImpl extends AbstractPrologCommandPlayer {
 	// Called from the calculating route thread.
 	@Override
 	public synchronized void playCommands(CommandBuilder builder) {
-		if (mTts != null) {
-			final List<String> execute = builder.execute(); //list of strings, the speech text, play it
-			StringBuilder bld = new StringBuilder();
-			for (String s : execute) {
-				bld.append(s).append(' ');
-			}
+		final List<String> execute = builder.execute(); //list of strings, the speech text, play it
+		StringBuilder bld = new StringBuilder();
+		for (String s : execute) {
+			bld.append(s).append(' ');
+		}
+		sendAlertToPebble(bld.toString());
+		if (mTts != null && !vrt.isMute()) {
 			if (ttsRequests++ == 0)
 				requestAudioFocus();
 			log.debug("ttsRequests="+ttsRequests);
-			sendAlertToPebble(bld.toString());
-			
 			params.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID,""+System.currentTimeMillis());
 			mTts.speak(bld.toString(), TextToSpeech.QUEUE_ADD, params);
 			// Audio focus will be released when onUtteranceCompleted() completed is called by the TTS engine.
+		} else {
+			sendAlertToAndroidWear(ctx, bld.toString());
 		}
 	}
 
@@ -124,35 +123,20 @@ public class TTSCommandPlayerImpl extends AbstractPrologCommandPlayer {
 		}
 	}
 
-	public void sendAlertToPebble(String message) {
+	public void sendAlertToPebble(String bld) {
 	    final Intent i = new Intent("com.getpebble.action.SEND_NOTIFICATION");
 	    final Map<String, Object> data = new HashMap<String, Object>();
 	    data.put("title", "Voice");
-	    data.put("body", message);
+	    data.put("body", bld.toString());
 	    final JSONObject jsonData = new JSONObject(data);
 	    final String notificationData = new JSONArray().put(jsonData).toString();
 	    i.putExtra("messageType", PEBBLE_ALERT);
 	    i.putExtra("sender", "OsmAnd");
 	    i.putExtra("notificationData", notificationData);
 	    mTtsContext.sendBroadcast(i);
-	    log.info("Send message to pebble " + message);
+	    log.info("Send message to pebble " + bld.toString());
 	}
 
-	public void sendAlertToAndroidWear(String message) {
-		int notificationId = 1;
-		NotificationCompat.Builder notificationBuilder =
-				new NotificationCompat.Builder(mTtsContext)
-						.setSmallIcon(R.drawable.icon)
-						.setContentTitle(mTtsContext.getString(R.string.app_name))
-						.setContentText(message)
-						.setGroup(WEAR_ALERT);
-
-		// Get an instance of the NotificationManager service
-		NotificationManagerCompat notificationManager =
-				NotificationManagerCompat.from(mTtsContext);
-		// Build the notification and issues it with notification manager.
-		notificationManager.notify(notificationId, notificationBuilder.build());
-	}
 
 	private void initializeEngine(final Context ctx, final Activity act)
 	{
@@ -172,7 +156,7 @@ public class TTSCommandPlayerImpl extends AbstractPrologCommandPlayer {
 						{
 							case TextToSpeech.LANG_MISSING_DATA:
 								if (isSettingsActivity(act)) {
-									Builder builder = createAlertDialog(
+									AlertDialog.Builder builder = createAlertDialog(
 										R.string.tts_missing_language_data_title,
 										R.string.tts_missing_language_data,
 										new IntentStarter(
@@ -194,7 +178,7 @@ public class TTSCommandPlayerImpl extends AbstractPrologCommandPlayer {
 								//maybe weird, but I didn't want to introduce parameter in around 5 methods just to do
 								//this if condition
 								if (isSettingsActivity(act)) {
-									Builder builder = createAlertDialog(
+									AlertDialog.Builder builder = createAlertDialog(
 											R.string.tts_language_not_supported_title,
 											R.string.tts_language_not_supported,
 											new IntentStarter(
@@ -225,9 +209,9 @@ public class TTSCommandPlayerImpl extends AbstractPrologCommandPlayer {
 		}
 	}
 	
-	private Builder createAlertDialog(int titleResID, int messageResID,
+	private AlertDialog.Builder createAlertDialog(int titleResID, int messageResID,
 			IntentStarter intentStarter, final Activity ctx) {
-		Builder builder = new AlertDialog.Builder(ctx);
+		AlertDialog.Builder builder = new AlertDialog.Builder(ctx);
 		builder.setCancelable(true);
 		builder.setNegativeButton(R.string.shared_string_no, null);
 		builder.setPositiveButton(R.string.shared_string_yes, intentStarter);

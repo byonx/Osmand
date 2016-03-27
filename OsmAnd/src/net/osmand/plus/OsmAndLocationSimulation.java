@@ -1,19 +1,9 @@
 package net.osmand.plus;
 
 
-import java.util.ArrayList;
-import java.util.List;
-
-import net.osmand.CallbackWithObject;
-import net.osmand.Location;
-import net.osmand.access.AccessibleToast;
-import net.osmand.plus.activities.MapActivity;
-import net.osmand.plus.helpers.GpxUiHelper;
-import net.osmand.plus.routing.RouteProvider.GPXRouteParamsBuilder;
-import net.osmand.plus.routing.RoutingHelper;
-import android.app.AlertDialog;
-import android.app.AlertDialog.Builder;
+import android.app.Activity;
 import android.content.DialogInterface;
+import android.support.v7.app.AlertDialog;
 import android.view.View;
 import android.widget.CompoundButton;
 import android.widget.CompoundButton.OnCheckedChangeListener;
@@ -22,6 +12,15 @@ import android.widget.RadioButton;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import net.osmand.CallbackWithObject;
+import net.osmand.Location;
+import net.osmand.access.AccessibleToast;
+import net.osmand.plus.helpers.GpxUiHelper;
+import net.osmand.plus.routing.RouteProvider.GPXRouteParamsBuilder;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class OsmAndLocationSimulation {
 
@@ -51,50 +50,55 @@ public class OsmAndLocationSimulation {
 //		}
 //	}
 
-	public void startStopRouteAnimation(final MapActivity ma) {
+	
+	public void startStopRouteAnimation(final Activity ma, final Runnable runnable) {
 		if (!isRouteAnimating()) {
-			Builder builder = new AlertDialog.Builder(ma);
+			AlertDialog.Builder builder = new AlertDialog.Builder(ma);
 			builder.setTitle(R.string.animate_route);
-			
+
 			final View view = ma.getLayoutInflater().inflate(R.layout.animate_route, null);
-			final View gpxView = ((LinearLayout)view.findViewById(R.id.layout_animate_gpx));
-			final RadioButton radioGPX = (RadioButton)view.findViewById(R.id.radio_gpx);
+			final View gpxView = ((LinearLayout) view.findViewById(R.id.layout_animate_gpx));
+			final RadioButton radioGPX = (RadioButton) view.findViewById(R.id.radio_gpx);
 			radioGPX.setOnCheckedChangeListener(new OnCheckedChangeListener() {
-				
+
 				@Override
 				public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-					gpxView.setVisibility(isChecked? View.VISIBLE : View.GONE);
+					gpxView.setVisibility(isChecked ? View.VISIBLE : View.GONE);
 				}
 			});
-			
-			
-			((TextView)view.findViewById(R.id.MinSpeedup)).setText("1"); //$NON-NLS-1$
-			((TextView)view.findViewById(R.id.MaxSpeedup)).setText("4"); //$NON-NLS-1$
+
+			((TextView) view.findViewById(R.id.MinSpeedup)).setText("1"); //$NON-NLS-1$
+			((TextView) view.findViewById(R.id.MaxSpeedup)).setText("4"); //$NON-NLS-1$
 			final SeekBar speedup = (SeekBar) view.findViewById(R.id.Speedup);
 			speedup.setMax(3);
 			builder.setView(view);
 			builder.setPositiveButton(R.string.shared_string_ok, new DialogInterface.OnClickListener() {
-				
+
 				@Override
 				public void onClick(DialogInterface dialog, int which) {
 					boolean gpxNavigation = radioGPX.isChecked();
 					if (gpxNavigation) {
-						GpxUiHelper.selectGPXFile(ma, false, false,
-								new CallbackWithObject<GPXUtilities.GPXFile[]>() {
-									@Override
-									public boolean processResult(GPXUtilities.GPXFile[] result) {
-										GPXRouteParamsBuilder builder = new GPXRouteParamsBuilder(result[0], app.getSettings());
-										startAnimationThread(app.getRoutingHelper(), ma, builder.getPoints(), true,
-												speedup.getProgress() + 1);
-										return true;
-									}
-								});
+						GpxUiHelper.selectGPXFile(ma, false, false, new CallbackWithObject<GPXUtilities.GPXFile[]>() {
+							@Override
+							public boolean processResult(GPXUtilities.GPXFile[] result) {
+								GPXRouteParamsBuilder builder = new GPXRouteParamsBuilder(result[0], app.getSettings());
+								startAnimationThread(app, builder.getPoints(), true, speedup.getProgress() + 1);
+								if (runnable != null) {
+									runnable.run();
+								}
+								return true;
+							}
+						});
 					} else {
 						List<Location> currentRoute = app.getRoutingHelper().getCurrentCalculatedRoute();
-						if(currentRoute.isEmpty()) {
-							AccessibleToast.makeText(app, R.string.animate_routing_route_not_calculated, Toast.LENGTH_LONG).show();
+						if (currentRoute.isEmpty()) {
+							AccessibleToast.makeText(app, R.string.animate_routing_route_not_calculated,
+									Toast.LENGTH_LONG).show();
 						} else {
-							startAnimationThread(app.getRoutingHelper(), ma, new ArrayList<Location>(currentRoute), false, 1);
+							startAnimationThread(app, new ArrayList<Location>(currentRoute), false, 1);
+							if (runnable != null) {
+								runnable.run();
+							}
 						}
 					}
 
@@ -106,9 +110,12 @@ public class OsmAndLocationSimulation {
 			stop();
 		}
 	}
+	
+	public void startStopRouteAnimation(final Activity ma)  {
+		startStopRouteAnimation(ma, null);
+	}
 
-	private void startAnimationThread(final RoutingHelper routingHelper,
-			final MapActivity ma, final List<Location> directions, final boolean useLocationTime, final float coeff) {
+	private void startAnimationThread(final OsmandApplication app, final List<Location> directions, final boolean useLocationTime, final float coeff) {
 		final float time = 1.5f;
 		routeAnimation = new Thread() {
 			@Override
@@ -148,7 +155,7 @@ public class OsmAndLocationSimulation {
 						current.setBearing(prev.bearingTo(current));
 					}
 					final Location toset = current;
-					ma.runOnUiThread(new Runnable() {
+					app.runInUIThread(new Runnable() {
 						@Override
 						public void run() {
 							provider.setLocationFromSimulation(toset);
@@ -203,4 +210,6 @@ public class OsmAndLocationSimulation {
 	private static double toRad(double degree) {
 		return degree * Math.PI / 180;
 	}
+
+	
 }

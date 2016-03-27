@@ -1,9 +1,13 @@
 package net.osmand.plus.helpers;
 
 import android.content.Context;
+
 import net.osmand.IndexConstants;
+import net.osmand.PlatformUtil;
 import net.osmand.map.OsmandRegions;
 import net.osmand.plus.R;
+
+import org.apache.commons.logging.Log;
 
 import java.lang.reflect.Field;
 
@@ -12,9 +16,9 @@ import java.lang.reflect.Field;
  * on 07.07.2014.
  */
 public class FileNameTranslationHelper {
-
+	private static final Log LOG = PlatformUtil.getLog(FileNameTranslationHelper.class);
 	public static final String WIKI_NAME = "_wiki";
-	public static final String HILL_SHADE = "Hillshade";
+	public static final String HILL_SHADE = "Hillshade_";
 
 	public static String getFileName(Context ctx, OsmandRegions regions, String fileName) {
 		String basename = getBasename(fileName);
@@ -44,17 +48,15 @@ public class FileNameTranslationHelper {
 		}
 
 		if (regions != null) {
-			return regions.getLocaleName(basename);
+			return regions.getLocaleName(basename, true);
 		}
 
 		return null;
 	}
 
 	public static String getHillShadeName(Context ctx, OsmandRegions regions, String basename) {
-		String intermName = basename.replace(HILL_SHADE,"");
-		String hillsh = ctx.getString(R.string.download_hillshade_item) + " ";
-
-		String locName = regions.getLocaleName(intermName.trim().replace(" ", "_"));
+		String hillsh = ctx.getString(R.string.download_hillshade_maps) + " ";
+		String locName = regions.getLocaleName(basename.trim(), true);
 		return hillsh + locName;
 	}
 
@@ -68,9 +70,9 @@ public class FileNameTranslationHelper {
 		int index = wikiWord.indexOf("(");
 		if (index >= 0) {
 			//removing word in "()" from recourse file
-			return wikiWord.substring(0, index) + wikiName;
+			return wikiName + " " + wikiWord.substring(0, index).trim();
 		}
-		return ctx.getString(R.string.amenity_type_osmwiki) + " " + wikiName;
+		return  wikiName + " " + ctx.getString(R.string.amenity_type_osmwiki);
 	}
 
 	public static String getVoiceName(Context ctx, String basename) {

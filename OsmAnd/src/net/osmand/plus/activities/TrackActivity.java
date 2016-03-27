@@ -13,12 +13,17 @@ import net.osmand.plus.GPXUtilities.GPXFile;
 import net.osmand.plus.GpxSelectionHelper;
 import net.osmand.plus.GpxSelectionHelper.GpxDisplayGroup;
 import net.osmand.plus.GpxSelectionHelper.SelectedGpxFile;
+import net.osmand.plus.OsmAndAppCustomization;
 import net.osmand.plus.OsmandApplication;
 import net.osmand.plus.R;
+import net.osmand.plus.myplaces.FavoritesActivity;
+import net.osmand.plus.myplaces.SelectedGPXFragment;
 import net.osmand.plus.myplaces.TrackPointFragment;
 import net.osmand.plus.myplaces.TrackRoutePointFragment;
 import net.osmand.plus.myplaces.TrackSegmentFragment;
 import net.osmand.plus.views.controls.PagerSlidingTabStrip;
+
+import android.app.Activity;
 import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -72,7 +77,6 @@ public class TrackActivity extends TabActivity {
 
 		setViewPagerAdapter(mViewPager, new ArrayList<TabActivity.TabItem>());
 		mSlidingTabLayout.setViewPager(mViewPager);
-
 		new AsyncTask<Void, Void, GPXFile>() {
 
 			protected void onPreExecute() {
@@ -90,6 +94,12 @@ public class TrackActivity extends TabActivity {
 				setSupportProgressBarIndeterminateVisibility(false);
 
 				setGpx(result);
+				for(WeakReference<Fragment> f : fragList) {
+					Fragment frag = f.get();
+					if(frag instanceof SelectedGPXFragment) {
+						((SelectedGPXFragment) frag).setContent();
+					}
+				}
 				((OsmandFragmentPagerAdapter) mViewPager.getAdapter()).addTab(
 						getTabIndicator(R.string.track_segments, TrackSegmentFragment.class));
 				if (isHavingWayPoints()){
@@ -114,6 +124,9 @@ public class TrackActivity extends TabActivity {
 	}
 
 	public List<GpxSelectionHelper.GpxDisplayGroup> getResult() {
+		if(result == null) {
+			return new ArrayList<GpxSelectionHelper.GpxDisplayGroup>();
+		}
 		if (result.modifiedTime != modifiedTime) {
 			modifiedTime = result.modifiedTime;
 			GpxSelectionHelper selectedGpxHelper = ((OsmandApplication) getApplication()).getSelectedGpxHelper();
@@ -163,6 +176,13 @@ public class TrackActivity extends TabActivity {
 		int itemId = item.getItemId();
 		switch (itemId) {
 		case android.R.id.home:
+			if (getIntent().hasExtra(MapActivity.INTENT_KEY_PARENT_MAP_ACTIVITY)) {
+				OsmAndAppCustomization appCustomization = getMyApplication().getAppCustomization();
+				final Intent favorites = new Intent(this, appCustomization.getFavoritesActivity());
+				getMyApplication().getSettings().FAVORITES_TAB.set(FavoritesActivity.GPX_TAB);
+				favorites.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+				startActivity(favorites);
+			}
 			finish();
 			return true;
 
@@ -171,11 +191,11 @@ public class TrackActivity extends TabActivity {
 	}
 
 	boolean isHavingWayPoints(){
-		return getGpx().hasWptPt();
+		return getGpx() != null && getGpx().hasWptPt();
 	}
 
 	boolean isHavingRoutePoints(){
-		return getGpx().hasRtePt();
+		return getGpx() != null && getGpx().hasRtePt();
 	}
 
 	public GPXFile getGpx() {

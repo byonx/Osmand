@@ -1,7 +1,14 @@
 package net.osmand.plus.activities;
 
-import java.text.MessageFormat;
-import java.util.ArrayList;
+import android.app.ProgressDialog;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.support.v7.app.AlertDialog;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.SeekBar;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import net.osmand.PlatformUtil;
 import net.osmand.access.AccessibleToast;
@@ -22,18 +29,8 @@ import net.osmand.util.MapUtils;
 
 import org.apache.commons.logging.Log;
 
-import android.app.AlertDialog;
-import android.app.AlertDialog.Builder;
-import android.app.ProgressDialog;
-import android.content.Context;
-import android.content.DialogInterface;
-import android.graphics.Rect;
-import android.graphics.RectF;
-import android.view.LayoutInflater;
-import android.view.View;
-import android.widget.SeekBar;
-import android.widget.TextView;
-import android.widget.Toast;
+import java.text.MessageFormat;
+import java.util.List;
 
 public class DownloadTilesDialog {
 
@@ -66,7 +63,7 @@ public class DownloadTilesDialog {
 		final int zoom = rb.getZoom();
 		
 		// calculate pixel rectangle
-		Builder builder = new AlertDialog.Builder(ctx);
+		AlertDialog.Builder builder = new AlertDialog.Builder(ctx);
 		LayoutInflater inflater = (LayoutInflater)ctx.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
 		View view = inflater.inflate(R.layout.download_tiles, null);
 		
@@ -113,6 +110,7 @@ public class DownloadTilesDialog {
 	}
 	
 	private volatile boolean cancel = false;
+	private IMapDownloaderCallback callback;
 	
 	public void run(final int zoom, final int progress, final QuadRect latlonRect, final ITileSource map){
 		cancel = false;
@@ -139,17 +137,17 @@ public class DownloadTilesDialog {
 		
 		final MapTileDownloader instance = MapTileDownloader.getInstance(Version.getFullVersion(app));
 		
-		final ArrayList<IMapDownloaderCallback> previousCallbacks = 
-			new ArrayList<IMapDownloaderCallback>(instance.getDownloaderCallbacks());
-		instance.getDownloaderCallbacks().clear();
-		instance.addDownloaderCallback(new IMapDownloaderCallback(){
+		final List<IMapDownloaderCallback> previousCallbacks = instance.getDownloaderCallbacks();
+		instance.clearCallbacks();
+		callback = new IMapDownloaderCallback(){
 			@Override
 			public void tileDownloaded(DownloadRequest request) {
 				if (request != null) {
 					progressDlg.setProgress(progressDlg.getProgress() + 1);
 				}
 			}
-		});
+		};
+		instance.addDownloaderCallback(callback);
 		
 		Runnable r = new Runnable(){
 			@Override
@@ -201,12 +199,15 @@ public class DownloadTilesDialog {
 						}
 					}
 					mapView.refreshMap();
+					callback = null;
 				} catch (Exception e) {
 					log.error("Exception while downloading tiles ", e); //$NON-NLS-1$
 					instance.refuseAllPreviousRequests();
 				} finally {
-					instance.getDownloaderCallbacks().clear();
-					instance.getDownloaderCallbacks().addAll(previousCallbacks);
+					instance.clearCallbacks();
+					for(IMapDownloaderCallback cbck : previousCallbacks) {
+						instance.addDownloaderCallback(cbck);
+					}
 					app.getResourceManager().reloadTilesFromFS();
 				}
 				progressDlg.dismiss();

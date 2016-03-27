@@ -1,5 +1,9 @@
 package net.osmand.osm.edit;
 
+import net.osmand.data.LatLon;
+import net.osmand.osm.edit.OSMSettings.OSMTagKey;
+
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -7,11 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-import net.osmand.data.LatLon;
-import net.osmand.osm.edit.OSMSettings.OSMTagKey;
 
-
-public abstract class Entity {
+public abstract class Entity implements Serializable {
 	public enum EntityType {
 		NODE,
 		WAY,
@@ -103,10 +104,17 @@ public abstract class Entity {
 	private Map<String, String> tags = null;
 	private final long id;
 	private boolean dataLoaded;
+	private int modify;  
+	public static final int MODIFY_UNKNOWN = 0;
+	public static final int MODIFY_DELETED = -1;
+	public static final int MODIFY_MODIFIED = 1;
+	public static final int MODIFY_CREATED = 2;
 	
 	public Entity(long id) {
 		this.id = id;
 	}
+	
+	
 
 	public Entity(Entity copy, long id) {
 		this.id = id;
@@ -114,6 +122,14 @@ public abstract class Entity {
 			putTag(t, copy.getTag(t));
 		}
 		this.dataLoaded = copy.dataLoaded;
+	}
+	
+	public int getModify() {
+		return modify;
+	}
+	
+	public void setModify(int modify) {
+		this.modify = modify;
 	}
 
 	public long getId() {

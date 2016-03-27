@@ -1,16 +1,12 @@
 package net.osmand.plus.voice;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
+import android.content.Context;
+import android.support.v4.app.NotificationCompat;
+import android.support.v4.app.NotificationManagerCompat;
 
 import net.osmand.IndexConstants;
 import net.osmand.PlatformUtil;
+import net.osmand.StateChangedListener;
 import net.osmand.plus.ApplicationMode;
 import net.osmand.plus.OsmandApplication;
 import net.osmand.plus.OsmandSettings;
@@ -19,6 +15,15 @@ import net.osmand.plus.R;
 import net.osmand.plus.api.AudioFocusHelper;
 
 import org.apache.commons.logging.Log;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
 
 import alice.tuprolog.InvalidLibraryException;
 import alice.tuprolog.InvalidTheoryException;
@@ -31,7 +36,7 @@ import alice.tuprolog.Term;
 import alice.tuprolog.Theory;
 import alice.tuprolog.Var;
 
-public abstract class AbstractPrologCommandPlayer implements CommandPlayer {
+public abstract class AbstractPrologCommandPlayer implements CommandPlayer, StateChangedListener<ApplicationMode> {
 
 	private static final Log log = PlatformUtil.getLog(AbstractPrologCommandPlayer.class);
 
@@ -49,12 +54,15 @@ public abstract class AbstractPrologCommandPlayer implements CommandPlayer {
 	public static final String A_RIGHT_SL = "right_sl";
 	public static final String A_RIGHT_KEEP = "right_keep";
 	protected static final String DELAY_CONST = "delay_";
+
+	private static final String WEAR_ALERT = "WEAR_ALERT";
 	/** Must be sorted array! */
 	private final int[] sortedVoiceVersions;
 	private AudioFocusHelper mAudioFocusHelper;
 	protected String language = "";
 	protected int streamType;
 	private int currentVersion;
+
 
 	protected AbstractPrologCommandPlayer(OsmandApplication ctx, String voiceProvider, String configFile, int[] sortedVoiceVersions)
 		throws CommandPlayerException 
@@ -90,7 +98,35 @@ public abstract class AbstractPrologCommandPlayer implements CommandPlayer {
 		return new String[] { "alice.tuprolog.lib.BasicLibrary",
 					"alice.tuprolog.lib.ISOLibrary"/*, "alice.tuprolog.lib.IOLibrary"*/};
 	}
+	
+	public void sendAlertToAndroidWear(Context ctx, String message) {
+		int notificationId = 1;
+		NotificationCompat.Builder notificationBuilder =
+				new NotificationCompat.Builder(ctx)
+						.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+						.setSmallIcon(R.drawable.icon)
+						.setContentTitle(ctx.getString(R.string.app_name))
+						.setContentText(message)
+						.setGroup(WEAR_ALERT);
 
+		// Get an instance of the NotificationManager service
+		NotificationManagerCompat notificationManager =
+				NotificationManagerCompat.from(ctx);
+		// Build the notification and issues it with notification manager.
+		notificationManager.notify(notificationId, notificationBuilder.build());
+	}
+
+	@Override
+	public void stateChanged(ApplicationMode change) {
+		if(prologSystem != null) {
+			prologSystem.getTheoryManager().retract(new Struct("appMode", new Var()));
+			prologSystem.getTheoryManager()
+				.assertA(
+						new Struct("appMode", new Struct(ctx.getSettings().APPLICATION_MODE.get().getStringKey()
+								.toLowerCase())), true, "", true);
+		}
+	}
+	
 	private void init(String voiceProvider, OsmandSettings settings, String configFile) throws CommandPlayerException {
 		prologSystem.clearTheory();
 		voiceDir = null;
@@ -123,7 +159,11 @@ public abstract class AbstractPrologCommandPlayer implements CommandPlayer {
 				if(m.getParent() != null) {
 					m = m.getParent();
 				}
-				prologSystem.addTheory(new Theory("appMode('"+m.getStringKey().toLowerCase()+"')."));
+				settings.APPLICATION_MODE.addListener(this);
+				prologSystem.getTheoryManager()
+				.assertA(
+						new Struct("appMode", new Struct(ctx.getSettings().APPLICATION_MODE.get().getStringKey()
+								.toLowerCase())), true, "", true);
 				prologSystem.addTheory(new Theory("measure('"+mc.toTTSString()+"')."));
 				prologSystem.addTheory(new Theory(config));
 				config.close();
@@ -149,6 +189,7 @@ public abstract class AbstractPrologCommandPlayer implements CommandPlayer {
 
 		}
 	}
+	
 
 	protected Term solveSimplePredicate(String predicate) {
 		Term val = null;
@@ -218,6 +259,9 @@ public abstract class AbstractPrologCommandPlayer implements CommandPlayer {
 
 	@Override
 	public void clear() {
+		if(ctx != null && ctx.getSettings() != null) {
+			ctx.getSettings().APPLICATION_MODE.removeListener(this);
+		}
 		ctx = null;
 		prologSystem = null;
 	}

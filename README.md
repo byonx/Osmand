@@ -1,11 +1,9 @@
 OsmAnd (OSM Automated Navigation Directions)
 ------------
-<p>This project aims at providing comfortable map viewing and navigation (routing) application for mobile devices. Particluar stress lies with complete offline features (via pre-loaded offline map data) or economic internet usage.
+<p>This project aims at providing comfortable map viewing and navigation (routing) application for mobile devices. Particular stress lies with complete offline features (via pre-loaded offline map data) or economic internet usage.
 To get started, continue with the basic description below, then find more detail on our Welcome Wiki Pages, the Project Homepage, or the OpenStreetMap OsmAnd Wiki Page.
 You are welcome to discuss any question regarding the project at the google group OsmAnd. Please do not use comments on wiki pages because it is rather difficult to find them.
 </p>
-
-[![tip for next commit](http://tip4commit.com/projects/33.svg)](http://tip4commit.com/projects/33)
 
 Functionality
 -------------
@@ -65,16 +63,18 @@ Functionality
 
 
 ####  Approximate map coverage and quality:
- * Western Europe: ++++
- * Eastern Europe: +++
- * Russia: +++
- * North America: +++
- * South America: ++
- * Asia: ++
- * Japan &amp; Korea: +++
- * Middle East: ++
- * Africa: ++
- * Antarctica: +
+| Region         |      |
+|----------------|------|
+| Western Europe | ++++ |
+| Eastern Europe | +++  |
+| Russia         | +++  |
+| North America  | +++  |
+| South America  | ++   |
+| Asia           | ++   |
+| Japan & Korea  | +++  |
+| Middle East    | ++   |
+| Africa         | ++   |
+| Antarctica     | +    |
 
 <p>
 List of countries supported (basically world wide!):

@@ -28,6 +28,7 @@ import net.osmand.plus.OsmandSettings;
 import net.osmand.plus.OsmandSettings.CommonPreference;
 import net.osmand.plus.render.RendererRegistry;
 import net.osmand.render.RenderingRuleProperty;
+import net.osmand.render.RenderingRuleStorageProperties;
 import net.osmand.render.RenderingRulesStorage;
 import net.osmand.util.Algorithms;
 
@@ -175,7 +176,9 @@ public class MapRendererContext implements RendererRegistry.IRendererLoadedEvent
 		RenderingRulesStorage storage = app.getRendererRegistry().getCurrentSelectedRenderer();
 		Map<String, String> props = new HashMap<String, String>();
 		for (RenderingRuleProperty customProp : storage.PROPS.getCustomRules()) {
-			if (customProp.isBoolean()) {
+			if(RenderingRuleStorageProperties.UI_CATEGORY_HIDDEN.equals(customProp.getCategory())){
+				continue;
+			} else if (customProp.isBoolean()) {
 				CommonPreference<Boolean> pref = prefs.getCustomRenderBooleanProperty(customProp.getAttrName());
 				props.put(customProp.getAttrName(), pref.get() + "");
 			} else {
@@ -199,6 +202,7 @@ public class MapRendererContext implements RendererRegistry.IRendererLoadedEvent
 	
 	private void recreateRasterAndSymbolsProvider() {
 		// Create new map primitiviser
+		// TODO Victor ask MapPrimitiviser, ObfMapObjectsProvider  
 		MapPrimitiviser mapPrimitiviser = new MapPrimitiviser(mapPresentationEnvironment);
 		ObfMapObjectsProvider obfMapObjectsProvider = new ObfMapObjectsProvider(obfsCollection);
 		// Create new map primitives provider

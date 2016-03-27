@@ -1,7 +1,15 @@
 package net.osmand.plus.dashboard;
 
-import java.util.ArrayList;
-import java.util.List;
+import android.app.Activity;
+import android.content.Intent;
+import android.os.Bundle;
+import android.support.annotation.Nullable;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import net.osmand.data.LatLon;
 import net.osmand.plus.OsmAndAppCustomization;
@@ -10,37 +18,38 @@ import net.osmand.plus.R;
 import net.osmand.plus.activities.MapActivity;
 import net.osmand.plus.activities.search.SearchActivity;
 import net.osmand.plus.activities.search.SearchHistoryFragment;
+import net.osmand.plus.dashboard.tools.DashFragmentData;
 import net.osmand.plus.dialogs.DirectionsDialogs;
-import net.osmand.plus.helpers.FontCache;
 import net.osmand.plus.helpers.SearchHistoryHelper;
 import net.osmand.plus.helpers.SearchHistoryHelper.HistoryEntry;
-import net.osmand.util.Algorithms;
-import android.app.Activity;
-import android.content.Intent;
-import android.graphics.Typeface;
-import android.os.Bundle;
-import android.support.annotation.Nullable;
-import android.view.LayoutInflater;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.TextView;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by Denis on 24.11.2014.
  */
 public class DashRecentsFragment extends DashLocationFragment {
 	public static final String TAG = "DASH_RECENTS_FRAGMENT";
+	public static final int TITLE_ID = R.string.shared_string_history;
 
 	private List<ImageView> arrows = new ArrayList<ImageView>();
 	List<HistoryEntry> points = new ArrayList<HistoryEntry>();
+	private static final String ROW_NUMBER_TAG = TAG + "_row_number";
+	private static final DashFragmentData.ShouldShowFunction SHOULD_SHOW_FUNCTION =
+			new DashboardOnMap.DefaultShouldShow() {
+				@Override
+				public int getTitleId() {
+					return TITLE_ID;
+				}
+			};
+	static final DashFragmentData FRAGMENT_DATA = new DashFragmentData(
+			TAG, DashRecentsFragment.class, SHOULD_SHOW_FUNCTION, 80, ROW_NUMBER_TAG);
 
 	@Override
-	public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+	public View initView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
 		View view = getActivity().getLayoutInflater().inflate(R.layout.dash_common_fragment, container, false);
-		((TextView)view.findViewById(R.id.fav_text)).setText(R.string.shared_string_history);
+		((TextView)view.findViewById(R.id.fav_text)).setText(TITLE_ID);
 		(view.findViewById(R.id.show_all)).setOnClickListener(new View.OnClickListener() {
 			@Override
 			public void onClick(View view) {
@@ -52,6 +61,7 @@ public class DashRecentsFragment extends DashLocationFragment {
 				search.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
 				getMyApplication().getSettings().SEARCH_TAB.set(SearchActivity.HISTORY_TAB_INDEX);
 				activity.startActivity(search);
+				closeDashboard();
 			}
 		});
 		return view;
@@ -77,9 +87,7 @@ public class DashRecentsFragment extends DashLocationFragment {
 
 		LinearLayout recents = (LinearLayout) mainView.findViewById(R.id.items);
 		recents.removeAllViews();
-		if (points.size() > 3) {
-			points = points.subList(0, 3);
-		}
+		DashboardOnMap.handleNumberOfRows(points, getMyApplication().getSettings(), ROW_NUMBER_TAG);
 		LatLon loc = getDefaultLocation();
 		List<DashLocationView> distances = new ArrayList<DashLocationFragment.DashLocationView>();
 		for (final HistoryEntry historyEntry : points) {
@@ -112,6 +120,4 @@ public class DashRecentsFragment extends DashLocationFragment {
 		}
 		this.distances = distances;
 	}
-
-
 }

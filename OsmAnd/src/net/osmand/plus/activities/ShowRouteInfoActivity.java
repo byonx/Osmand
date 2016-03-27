@@ -11,7 +11,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.List;
 
-import net.osmand.IndexConstants;
 import net.osmand.Location;
 import net.osmand.data.PointDescription;
 import net.osmand.plus.GPXUtilities;
@@ -23,7 +22,7 @@ import net.osmand.plus.R;
 import net.osmand.plus.routing.RouteDirectionInfo;
 import net.osmand.plus.routing.RoutingHelper;
 import net.osmand.plus.views.TurnPathHelper;
-import net.osmand.plus.views.controls.MapRouteInfoControl;
+import net.osmand.plus.mapcontextmenu.other.MapRouteInfoMenu;
 import net.osmand.util.Algorithms;
 import android.content.Intent;
 import android.net.Uri;
@@ -145,7 +144,7 @@ public class ShowRouteInfoActivity extends OsmandListActivity {
 		RouteDirectionInfo item = ((RouteInfoAdapter)getListAdapter()).getItem(position - 1);
 		Location loc = helper.getLocationFromRouteDirection(item);
 		if(loc != null){
-			MapRouteInfoControl.directionInfo = position - 1;
+			MapRouteInfoMenu.directionInfo = position - 1;
 			OsmandSettings settings = ((OsmandApplication) getApplication()).getSettings();
 			settings.setMapLocationToShow(loc.getLatitude(),loc.getLongitude(),
 					Math.max(13, settings.getLastKnownMapZoom()), 
@@ -310,9 +309,7 @@ public class ShowRouteInfoActivity extends OsmandListActivity {
 			html.append("</body>");
 			html.append("</html>");
 
-			file = new File(((OsmandApplication) getApplication())
-					.getAppCustomization().getExternalStorageDir(),
-					IndexConstants.APP_DIR + FILE_NAME);
+			file = ((OsmandApplication) getApplication()).getAppPath(FILE_NAME);
 			fos = new FileOutputStream(file);
 			fos.write(html.toString().getBytes("UTF-8"));
 			fos.flush();

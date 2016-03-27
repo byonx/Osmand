@@ -14,12 +14,12 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 import net.osmand.IProgress;
 import net.osmand.NativeLibrary.NativeSearchResult;
@@ -38,7 +38,7 @@ import net.osmand.binary.RouteDataObject;
 import net.osmand.data.QuadPointDouble;
 import net.osmand.data.QuadRect;
 import net.osmand.data.RotatedTileBox;
-import net.osmand.map.MapTileDownloader.IMapDownloaderCallback;
+import net.osmand.map.MapTileDownloader;
 import net.osmand.plus.OsmandApplication;
 import net.osmand.plus.OsmandPlugin;
 import net.osmand.plus.OsmandSettings;
@@ -72,9 +72,10 @@ public class MapRenderRepositories {
 	private final static Log log = PlatformUtil.getLog(MapRenderRepositories.class);
 	private final OsmandApplication context;
 	private final static int zoomOnlyForBasemaps = 11;
+
 	static int zoomForBaseRouteRendering  = 14;
 	private Handler handler;
-	private Map<String, BinaryMapIndexReader> files = new ConcurrentHashMap<String, BinaryMapIndexReader>();
+	private Map<String, BinaryMapIndexReader> files = new LinkedHashMap<String, BinaryMapIndexReader>();
 	private Set<String> nativeFiles = new HashSet<String>();
 	private OsmandRenderer renderer;
 	
@@ -126,11 +127,13 @@ public class MapRenderRepositories {
 	}
 
 	public void initializeNewResource(final IProgress progress, File file, BinaryMapIndexReader reader) {
-		if (files.containsKey(file.getAbsolutePath())) {
-			closeConnection(files.get(file.getAbsolutePath()), file.getAbsolutePath());
+		if (files.containsKey(file.getName())) {
+			closeConnection(file.getName());
 		
 		}
-		files.put(file.getAbsolutePath(), reader);
+		LinkedHashMap<String, BinaryMapIndexReader> cpfiles = new LinkedHashMap<String, BinaryMapIndexReader>(files);
+		cpfiles.put(file.getName(), reader);
+		files = cpfiles;
 	}
 
 	public RotatedTileBox getBitmapLocation() {
@@ -141,19 +144,24 @@ public class MapRenderRepositories {
 		return prevBmpLocation;
 	}
 
-	protected void closeConnection(BinaryMapIndexReader c, String file) {
-		files.remove(file);
-		if(nativeFiles.contains(file)){
+	public synchronized void closeConnection(String file) {
+		LinkedHashMap<String, BinaryMapIndexReader> cpfiles = new LinkedHashMap<String, BinaryMapIndexReader>(files);
+		BinaryMapIndexReader bmir = cpfiles.remove(file);
+		files = cpfiles;
+		if (nativeFiles.contains(file)) {
 			NativeOsmandLibrary lib = NativeOsmandLibrary.getLoadedLibrary();
-			if(lib != null) {
-				lib.closeMapFile(file);
+			if (lib != null) {
+				lib.closeMapFile(bmir != null ? bmir.getFile().getAbsolutePath() : file);
 				nativeFiles.remove(file);
+				clearCache();
 			}
 		}
-		try {
-			c.close();
-		} catch (IOException e) {
-			e.printStackTrace();
+		if (bmir != null) {
+			try {
+				bmir.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 	}
 
@@ -173,7 +181,7 @@ public class MapRenderRepositories {
 		bmp = null;
 		bmpLocation = null;
 		for (String f : new ArrayList<String>(files.keySet())) {
-			closeConnection(files.get(f), f);
+			closeConnection(f);
 		}
 	}
 
@@ -182,13 +190,16 @@ public class MapRenderRepositories {
 			return false;
 		}
 		if (requestedBox == null) {
+			log.info("RENDER MAP: update due to start");
 			return true;
 		}
 		if (drawSettings.isUpdateVectorRendering()) {
+			log.info("RENDER MAP: update due to request");
 			return true;
 		}
 		if (requestedBox.getZoom() != box.getZoom() ||
 				requestedBox.getMapDensity() != box.getMapDensity()) {
+			log.info("RENDER MAP: update due zoom/map density");
 			return true;
 		}
 
@@ -199,9 +210,14 @@ public class MapRenderRepositories {
 			deltaRotate += 360;
 		}
 		if (Math.abs(deltaRotate) > 25) {
+			log.info("RENDER MAP: update due to rotation");
 			return true;
 		}
-		return !requestedBox.containsTileBox(box);
+		boolean upd = !requestedBox.containsTileBox(box);
+		if(upd) {
+			log.info("RENDER MAP: update due to tile box");
+		}
+		return upd;
 	}
 
 	public boolean isEmpty() {
@@ -216,6 +232,11 @@ public class MapRenderRepositories {
 		if (searchRequest != null) {
 			searchRequest.setInterrupted(true);
 		}
+		log.info("RENDER MAP: Interrupt rendering map");
+	}
+	
+	public boolean wasInterrupted() {
+		return interrupted;
 	}
 
 	private boolean checkWhetherInterrupted() {
@@ -245,16 +266,7 @@ public class MapRenderRepositories {
 		long now = System.currentTimeMillis();
 
 		// check that everything is initialized
-		for (String mapName : files.keySet()) {
-			if (!nativeFiles.contains(mapName)) {
-				nativeFiles.add(mapName);
-				if (!library.initMapFile(mapName)) {
-					continue;
-				}
-				log.debug("Native resource " + mapName + " initialized"); //$NON-NLS-1$ //$NON-NLS-2$
-			}
-		}
-		
+		checkInitialized(zoom, library, leftX, rightX, bottomY, topY);
 		NativeSearchResult resultHandler = library.searchObjectsForRendering(leftX, rightX, topY, bottomY, zoom, renderingReq,
 				checkForDuplicateObjectIds, this, "");
 		if (checkWhetherInterrupted()) {
@@ -271,6 +283,27 @@ public class MapRenderRepositories {
 				dataBox.bottom, dataBox.top, dataBox.left, dataBox.right, zoom));
 		log.info(String.format("Native search: %s ms ", System.currentTimeMillis() - now)); //$NON-NLS-1$
 		return true;
+	}
+
+	public void checkInitialized(final int zoom, NativeOsmandLibrary library, int leftX, int rightX, int bottomY,
+			int topY) {
+		if(library == null) {
+			return;
+		}
+		for (String mapName : files.keySet()) {
+			BinaryMapIndexReader fr = files.get(mapName);
+			if (fr != null && (fr.containsMapData(leftX, topY, rightX, bottomY, zoom) || 
+					fr.containsRouteData(leftX, topY, rightX, bottomY, zoom))) {
+				if (!nativeFiles.contains(mapName)) {
+					long time = System.currentTimeMillis();
+					nativeFiles.add(mapName);
+					if (!library.initMapFile(fr.getFile().getAbsolutePath())) {
+						continue;
+					}
+					log.debug("Native resource " + mapName + " initialized " + (System.currentTimeMillis() - time) + " ms"); //$NON-NLS-1$ //$NON-NLS-2$
+				}
+			}
+		}
 	}
 	
 	private void readRouteDataAsMapObjects(SearchRequest<BinaryMapDataObject> sr, BinaryMapIndexReader c, 
@@ -566,8 +599,12 @@ public class MapRenderRepositories {
 
 	
 
-	public synchronized void loadMap(RotatedTileBox tileRect, List<IMapDownloaderCallback> notifyList) {
+	public synchronized void loadMap(RotatedTileBox tileRect, MapTileDownloader mapTileDownloader) {
+		boolean prevInterrupted = interrupted;
 		interrupted = false;
+		// prevent editing
+		requestedBox = new RotatedTileBox(tileRect);
+		log.info("RENDER MAP: new request " + tileRect ); 
 		if (currentRenderingContext != null) {
 			currentRenderingContext = null;
 		}
@@ -583,9 +620,17 @@ public class MapRenderRepositories {
 				if (customProp.isBoolean()) {
 					if(customProp.getAttrName().equals(RenderingRuleStorageProperties.A_ENGINE_V1)) {
 						renderingReq.setBooleanFilter(customProp, true);
+					} else if (RenderingRuleStorageProperties.UI_CATEGORY_HIDDEN.equals(customProp.getCategory())) {
+						renderingReq.setBooleanFilter(customProp, false);
 					} else {
 						CommonPreference<Boolean> pref = prefs.getCustomRenderBooleanProperty(customProp.getAttrName());
 						renderingReq.setBooleanFilter(customProp, pref.get());
+					}
+				} else if (RenderingRuleStorageProperties.UI_CATEGORY_HIDDEN.equals(customProp.getCategory())) {
+					if (customProp.isString()) {
+						renderingReq.setStringFilter(customProp, "");
+					} else {
+						renderingReq.setIntFilter(customProp, 0);
 					}
 				} else {
 					CommonPreference<String> settings = prefs.getCustomRenderProperty(customProp.getAttrName());
@@ -593,8 +638,6 @@ public class MapRenderRepositories {
 					if (!Algorithms.isEmpty(res)) {
 						if (customProp.isString()) {
 							renderingReq.setStringFilter(customProp, res);
-						} else if (customProp.isBoolean()) {
-							renderingReq.setBooleanFilter(customProp, "true".equalsIgnoreCase(res));
 						} else {
 							try {
 								renderingReq.setIntFilter(customProp, Integer.parseInt(res));
@@ -602,21 +645,24 @@ public class MapRenderRepositories {
 								e.printStackTrace();
 							}
 						}
+					} else {
+						if (customProp.isString()) {
+							renderingReq.setStringFilter(customProp, "");
+						}
 					}
 				}
 			}
 			renderingReq.saveState();
 			NativeOsmandLibrary nativeLib = !prefs.SAFE_MODE.get() ? NativeOsmandLibrary.getLibrary(storage, context) : null;
 
-			// prevent editing
-			requestedBox = new RotatedTileBox(tileRect);
+
 			// calculate data box
 			QuadRect dataBox = requestedBox.getLatLonBounds();
 			int dataBoxZoom = requestedBox.getZoom();
 			long now = System.currentTimeMillis();
 			if (cObjectsBox.left > dataBox.left || cObjectsBox.top < dataBox.top || cObjectsBox.right < dataBox.right
 					|| cObjectsBox.bottom > dataBox.bottom || (nativeLib != null) == (cNativeObjects == null)
-					|| dataBoxZoom != cObjectsZoom) {
+					|| dataBoxZoom != cObjectsZoom || prevInterrupted) {
 				// increase data box in order for rotate
 				if ((dataBox.right - dataBox.left) > (dataBox.top - dataBox.bottom)) {
 					double wi = (dataBox.right - dataBox.left) * .05;
@@ -673,7 +719,12 @@ public class MapRenderRepositories {
 			currentRenderingContext.width = requestedBox.getPixWidth();
 			currentRenderingContext.height = requestedBox.getPixHeight();
 			currentRenderingContext.nightMode = nightMode;
-			currentRenderingContext.preferredLocale = prefs.MAP_PREFERRED_LOCALE.get();
+			if(requestedBox.getZoom() <= zoomOnlyForBasemaps && 
+					"".equals(prefs.MAP_PREFERRED_LOCALE.get())) {
+				currentRenderingContext.preferredLocale = app.getLanguage();
+			} else {
+				currentRenderingContext.preferredLocale = prefs.MAP_PREFERRED_LOCALE.get();
+			}
 			final float mapDensity = (float) requestedBox.getMapDensity();
 			currentRenderingContext.setDensityValue(mapDensity);
 			//Text/icon scales according to mapDensity (so text is size of road)
@@ -701,28 +752,27 @@ public class MapRenderRepositories {
 			Bitmap reuse = prevBmp;
 			this.prevBmp = this.bmp;
 			this.prevBmpLocation = this.bmpLocation;
-			if (reuse != null && reuse.getWidth() == currentRenderingContext.width && reuse.getHeight() == currentRenderingContext.height) {
+			// necessary for transparent, otherwise 2 times smaller 
+			Config cfg = transparent ?  Config.ARGB_8888 : Config.RGB_565;
+			if (reuse != null && reuse.getWidth() == currentRenderingContext.width && reuse.getHeight() == currentRenderingContext.height &&
+					cfg == reuse.getConfig()) {
 				bmp = reuse;
 				bmp.eraseColor(currentRenderingContext.defaultColor);
 			} else {
 				if(reuse != null){
 					log.warn(String.format("Create new image ? %d != %d (w) %d != %d (h) ", currentRenderingContext.width, reuse.getWidth(), currentRenderingContext.height, reuse.getHeight()));
 				}
-				if(transparent) {
-					// necessary
-					bmp = Bitmap.createBitmap(currentRenderingContext.width, currentRenderingContext.height, Config.ARGB_8888);
-				} else {
-					// better picture ? 
-					bmp = Bitmap.createBitmap(currentRenderingContext.width, currentRenderingContext.height, Config.ARGB_8888);
+				bmp = Bitmap.createBitmap(currentRenderingContext.width, currentRenderingContext.height, cfg);
+				if(reuse != null) {
+					reuse.recycle();
 				}
 			}
 			this.bmp = bmp;
 			this.bmpLocation = tileRect;
-			
 			if(nativeLib != null) {
-				renderer.generateNewBitmapNative(currentRenderingContext, nativeLib, cNativeObjects, bmp, renderingReq, notifyList);
+				renderer.generateNewBitmapNative(currentRenderingContext, nativeLib, cNativeObjects, bmp, renderingReq, mapTileDownloader);
 			} else {
-				renderer.generateNewBitmap(currentRenderingContext, cObjects, bmp, renderingReq, notifyList);
+				renderer.generateNewBitmap(currentRenderingContext, cObjects, bmp, renderingReq, mapTileDownloader);
 			}
 			// Force to use rendering request in order to prevent Garbage Collector when it is used in C++
 			if(renderingReq != null){

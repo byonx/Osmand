@@ -10,6 +10,7 @@ import net.osmand.binary.BinaryMapRouteReaderAdapter.RouteTypeRule;
 import net.osmand.data.LatLon;
 import net.osmand.data.LocationPoint;
 import net.osmand.plus.ApplicationMode;
+import net.osmand.plus.OsmandApplication;
 import net.osmand.plus.R;
 import net.osmand.router.RouteSegmentResult;
 import net.osmand.router.TurnType;
@@ -85,7 +86,7 @@ public class RouteCalculationResult {
 	}
 
 	public RouteCalculationResult(List<RouteSegmentResult> list, Location start, LatLon end, List<LatLon> intermediates,  
-			Context ctx, boolean leftSide, float routingTime, List<LocationPoint> waypoints) {
+			OsmandApplication ctx, boolean leftSide, float routingTime, List<LocationPoint> waypoints) {
 		this.routingTime = routingTime;
 		if(waypoints != null) {
 			this.locationPoints.addAll(waypoints);
@@ -172,8 +173,8 @@ public class RouteCalculationResult {
 
 	private static void attachAlarmInfo(List<AlarmInfo> alarms, RouteSegmentResult res, int intId, int locInd) {
 		int[] pointTypes = res.getObject().getPointTypes(intId);
-		RouteRegion reg = res.getObject().region;
 		if (pointTypes != null) {
+			RouteRegion reg = res.getObject().region;
 			for (int r = 0; r < pointTypes.length; r++) {
 				RouteTypeRule typeRule = reg.quickGetEncodingRule(pointTypes[r]);
 				int x31 = res.getObject().getPoint31XTile(intId);
@@ -207,7 +208,7 @@ public class RouteCalculationResult {
 	 * PREPARATION 
 	 */
 	private static List<RouteSegmentResult> convertVectorResult(List<RouteDirectionInfo> directions, List<Location> locations, List<RouteSegmentResult> list,
-			List<AlarmInfo> alarms, Context ctx) {
+			List<AlarmInfo> alarms, OsmandApplication ctx) {
 		float prevDirectionTime = 0;
 		float prevDirectionDistance = 0;
 		List<RouteSegmentResult> segmentsToPopulate = new ArrayList<RouteSegmentResult>();
@@ -243,23 +244,29 @@ public class RouteCalculationResult {
                 if (routeInd  < list.size()) {
                     int lind = routeInd;
                     if(turn.isRoundAbout()) {
-                        int roundAboutEnd = prevLocationSize - 1;
+                        int roundAboutEnd = prevLocationSize ;
                     	// take next name for roundabout (not roundabout name)
-                    	while(lind < list.size() -1 && list.get(lind).getObject().roundabout()) {
-                    		roundAboutEnd += Math.abs(list.get(lind).getEndPointIndex()-list.get(lind).getStartPointIndex());
-                    		lind++;
-                    	}
+						while (lind < list.size() - 1 && list.get(lind).getObject().roundabout()) {
+							roundAboutEnd++;
+							lind++;
+						}
                     	// Consider roundabout end.
                     	info.routeEndPointOffset = roundAboutEnd;
                     }
                     RouteSegmentResult next = list.get(lind);
                     info.setRef(next.getObject().getRef());
-                    info.setStreetName(next.getObject().getName());
-                    info.setDestinationName(next.getObject().getDestinationName());
+                    info.setStreetName(next.getObject().getName(ctx.getSettings().MAP_PREFERRED_LOCALE.get()));
+                    info.setDestinationName(next.getObject().getDestinationName(ctx.getSettings().MAP_PREFERRED_LOCALE.get()));
                 }
 
                 String description = toString(turn, ctx) + " " + RoutingHelper.formatStreetName(info.getStreetName(),
 						info.getRef(), info.getDestinationName());
+                String[] pointNames = s.getObject().getPointNames(s.getStartPointIndex());
+                if(pointNames != null) {
+					for (int t = 0; t < pointNames.length; t++) {
+						description += " " + pointNames[t];
+					}
+                }
 				info.setDescriptionRoute(description);
 				info.routePointOffset = prevLocationSize;
 				if(directions.size() > 0 && prevDirectionTime > 0 && prevDirectionDistance > 0) {
@@ -665,7 +672,7 @@ public class RouteCalculationResult {
 	public float getCurrentMaxSpeed() {
 		RouteSegmentResult res = getCurrentSegmentResult();
 		if(res != null) {
-			return res.getObject().getMaximumSpeed();
+			return res.getObject().getMaximumSpeed(res.isForwardDirection());
 		}
 		return 0;
 	}
@@ -811,6 +818,7 @@ public class RouteCalculationResult {
 									!Algorithms.objectEquals(p.getStreetName(), i.getStreetName()))) {
 						p = new RouteDirectionInfo(i.getAverageSpeed(), i.getTurnType());
 						p.routePointOffset = i.routePointOffset;
+						p.routeEndPointOffset = i.routeEndPointOffset;
 						p.setDestinationName(i.getDestinationName());
 						p.setRef(i.getRef());
 						p.setStreetName(i.getStreetName());

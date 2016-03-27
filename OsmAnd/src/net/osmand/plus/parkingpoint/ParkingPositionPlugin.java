@@ -1,30 +1,11 @@
 package net.osmand.plus.parkingpoint;
 
 
-import java.util.Calendar;
-
-import net.osmand.data.LatLon;
-import net.osmand.plus.ApplicationMode;
-import net.osmand.plus.ContextMenuAdapter;
-import net.osmand.plus.ContextMenuAdapter.OnContextMenuClick;
-import net.osmand.plus.OsmAndFormatter;
-import net.osmand.plus.OsmandApplication;
-import net.osmand.plus.OsmandPlugin;
-import net.osmand.plus.OsmandSettings;
-import net.osmand.plus.OsmandSettings.CommonPreference;
-import net.osmand.plus.R;
-import net.osmand.plus.activities.MapActivity;
-import net.osmand.plus.views.AnimateDraggingMapThread;
-import net.osmand.plus.views.MapInfoLayer;
-import net.osmand.plus.views.OsmandMapLayer.DrawSettings;
-import net.osmand.plus.views.OsmandMapTileView;
-import net.osmand.plus.views.mapwidgets.TextInfoWidget;
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.app.AlertDialog.Builder;
 import android.app.Dialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.support.v7.app.AlertDialog;
 import android.text.format.DateFormat;
 import android.text.format.Time;
 import android.view.View;
@@ -33,6 +14,28 @@ import android.widget.CheckBox;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.TimePicker;
+
+import net.osmand.data.LatLon;
+import net.osmand.plus.ApplicationMode;
+import net.osmand.plus.ContextMenuAdapter;
+import net.osmand.plus.ContextMenuAdapter.OnContextMenuClick;
+import net.osmand.plus.ContextMenuItem;
+import net.osmand.plus.OsmAndFormatter;
+import net.osmand.plus.OsmandApplication;
+import net.osmand.plus.OsmandPlugin;
+import net.osmand.plus.OsmandSettings;
+import net.osmand.plus.OsmandSettings.CommonPreference;
+import net.osmand.plus.R;
+import net.osmand.plus.activities.MapActivity;
+import net.osmand.plus.dashboard.tools.DashFragmentData;
+import net.osmand.plus.mapcontextmenu.MapContextMenu;
+import net.osmand.plus.views.AnimateDraggingMapThread;
+import net.osmand.plus.views.MapInfoLayer;
+import net.osmand.plus.views.OsmandMapLayer.DrawSettings;
+import net.osmand.plus.views.OsmandMapTileView;
+import net.osmand.plus.views.mapwidgets.TextInfoWidget;
+
+import java.util.Calendar;
 
 /**
  * 
@@ -121,8 +124,8 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 	}
 
 	public boolean setParkingPosition(double latitude, double longitude) {
-		parkingLat.set((float)latitude);
-		parkingLon.set((float)longitude);
+		parkingLat.set((float) latitude);
+		parkingLon.set((float) longitude);
         parkingPosition = constructParkingPosition();
 		return true;
 	}
@@ -144,12 +147,6 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 		return true;
 	}
 
-
-	@Override
-	public boolean init(OsmandApplication app, Activity activity) {
-		return true;
-	}
-
 	@Override
 	public String getId() {
 		return ID;
@@ -166,6 +163,12 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 	}
 
 	@Override
+	public String getHelpFileName() {
+		return "feature_articles/parking-plugin.html";
+	}
+
+
+	@Override
 	public void registerLayers(MapActivity activity) {
 		// remove old if existing after turn
 		if(parkingLayer != null) {
@@ -178,11 +181,24 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 
 	@Override
 	public void updateLayers(OsmandMapTileView mapView, MapActivity activity) {
-		if (parkingLayer == null) {
-			registerLayers(activity);
-		}
-		if (parkingPlaceControl == null) {
-			registerWidget(activity);
+		if (isActive()) {
+			if (parkingLayer == null) {
+				registerLayers(activity);
+			}
+			if (parkingPlaceControl == null) {
+				registerWidget(activity);
+			}
+		} else {
+			if (parkingLayer != null) {
+				activity.getMapView().removeLayer(parkingLayer);
+				parkingLayer = null;
+			}
+			MapInfoLayer mapInfoLayer = activity.getMapLayers().getMapInfoLayer();
+			if (mapInfoLayer != null && parkingPlaceControl != null) {
+				mapInfoLayer.removeSideWidget(parkingPlaceControl);
+				mapInfoLayer.recreateControls();
+				parkingPlaceControl = null;
+			}
 		}
 	}
 
@@ -191,7 +207,7 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 		if (mapInfoLayer != null) {
 			parkingPlaceControl = createParkingPlaceInfoControl(activity);
 			mapInfoLayer.registerSideWidget(parkingPlaceControl,
-					R.drawable.ic_action_parking_dark, R.drawable.widget_parking, R.string.map_widget_parking, "parking", false, 8);
+					R.drawable.ic_action_parking_dark,  R.string.map_widget_parking, "parking", false, 8);
 			mapInfoLayer.recreateControls();
 		}
 	}
@@ -200,21 +216,7 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 	public void registerMapContextMenuActions(final MapActivity mapActivity,
 			final double latitude, final double longitude,
 			ContextMenuAdapter adapter, Object selectedObj) {
-		if (selectedObj == parkingPosition && parkingPosition != null) {
-			OnContextMenuClick removeListener = new OnContextMenuClick() {
-				@Override
-				public boolean onContextMenuClick(ArrayAdapter<?> adapter, int resId,
-						int pos, boolean isChecked) {
-					if ((resId == R.string.context_menu_item_delete_parking_point)) {
-						showDeleteDialog(mapActivity);
-					}
-					return true;
-				}
-			};
-			adapter.item(R.string.context_menu_item_delete_parking_point)
-				.iconColor( R.drawable.ic_action_remove_dark).listen(removeListener).position(0).reg();
-		}
-		
+
 		OnContextMenuClick addListener = new OnContextMenuClick() {
 			@Override
 			public boolean onContextMenuClick(ArrayAdapter<?> adapter, int resId,
@@ -225,9 +227,11 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 				return true;
 			}
 		};
-		adapter.item(R.string.context_menu_item_add_parking_point)
-		.iconColor( R.drawable.ic_action_parking_dark).listen(addListener).reg();
-		
+		adapter.addItem(new ContextMenuItem.ItemBuilder()
+				.setTitleId(R.string.context_menu_item_add_parking_point, mapActivity)
+				.setColorIcon(R.drawable.ic_action_parking_dark)
+				.setListener(addListener)
+				.createItem());
 	}
 
 	/**
@@ -265,6 +269,7 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 				}
 				addOrRemoveParkingEvent(false);
 				setParkingPosition(mapActivity, latitude, longitude, false);
+				showContextMenuIfNeeded(mapActivity);
 				mapActivity.getMapView().refreshMap();
 			}
 		});
@@ -272,12 +277,22 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 		choose.show();
 
 	}
-	
+
+	private void showContextMenuIfNeeded(final MapActivity mapActivity) {
+		if (parkingLayer != null) {
+			MapContextMenu menu = mapActivity.getContextMenu();
+			if (menu.isVisible()) {
+				menu.show(new LatLon(parkingPosition.getLatitude(), parkingPosition.getLongitude()),
+						parkingLayer.getObjectName(parkingPosition), parkingPosition);
+			}
+		}
+	}
+
 	/**
 	 * Method creates confirmation dialog for deletion of a parking location.
 	 */
 	public AlertDialog showDeleteDialog(final Activity activity) {
-		Builder confirm = new AlertDialog.Builder(activity);
+		AlertDialog.Builder confirm = new AlertDialog.Builder(activity);
 		confirm.setTitle(activity.getString(R.string.osmand_parking_delete));
 		confirm.setMessage(activity.getString(R.string.osmand_parking_delete_confirm));
 		confirm.setCancelable(true);
@@ -285,12 +300,9 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 			@Override
 			public void onClick(DialogInterface dialog, int which) {
 				showDeleteEventWarning(activity);
-				if(parkingLayer != null) {
-					parkingLayer.refresh();
-				}
-				clearParkingPosition();
-				if (activity instanceof MapActivity){
-					((MapActivity)activity).getMapView().refreshMap();
+				cancelParking();
+				if (activity instanceof MapActivity) {
+					((MapActivity) activity).getContextMenu().close();
 				}
 			}
 		});
@@ -307,10 +319,15 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 	 */
 	private void showSetTimeLimitDialog(final MapActivity mapActivity, final Dialog choose) {
 		final View setTimeParking = mapActivity.getLayoutInflater().inflate(R.layout.parking_set_time_limit, null);
-		Builder setTime = new AlertDialog.Builder(mapActivity);
+		AlertDialog.Builder setTime = new AlertDialog.Builder(mapActivity);
 		setTime.setView(setTimeParking);
 		setTime.setTitle(mapActivity.getString(R.string.osmand_parking_time_limit_title));
-		setTime.setNegativeButton(R.string.shared_string_cancel, null);
+		setTime.setNegativeButton(R.string.shared_string_cancel, new DialogInterface.OnClickListener() {
+			@Override
+			public void onClick(DialogInterface dialog, int which) {
+				cancelParking();
+			}
+		});
 		final TextView  textView = (TextView) setTimeParking.findViewById(R.id.parkTime);
 		final TimePicker timePicker = (TimePicker) setTimeParking.findViewById(R.id.parking_time_picker);
 
@@ -319,7 +336,7 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 			private boolean mIgnoreEvent = false;
             private Calendar cal = Calendar.getInstance();
 
-			
+
 			@Override
 			public void onTimeChanged(TimePicker timePicker, int hourOfDay, int minute) {
                 if (mIgnoreEvent) {
@@ -355,8 +372,8 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 				Calendar cal = Calendar.getInstance();
 				//int hour = cal.get(Calendar.HOUR_OF_DAY );
 				//int minute = cal.get(Calendar.MINUTE);
-                cal.add(Calendar.HOUR_OF_DAY, timePicker.getCurrentHour());
-                cal.add(Calendar.MINUTE, timePicker.getCurrentMinute());
+				cal.add(Calendar.HOUR_OF_DAY, timePicker.getCurrentHour());
+				cal.add(Calendar.MINUTE, timePicker.getCurrentMinute());
 				setParkingTime(cal.getTimeInMillis());
 				CheckBox addCalendarEvent = (CheckBox) setTimeParking.findViewById(R.id.check_event_in_calendar);
 				if (addCalendarEvent.isChecked()) {
@@ -365,6 +382,7 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 				} else {
 					addOrRemoveParkingEvent(false);
 				}
+				showContextMenuIfNeeded(mapActivity);
 			}
 		});
 		setTime.create();
@@ -381,7 +399,7 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 		intent.putExtra("calendar_id", 1); //$NON-NLS-1$
 		intent.putExtra("title", view.getContext().getString(R.string.osmand_parking_event)); //$NON-NLS-1$
 		intent.putExtra("beginTime", getParkingTime()); //$NON-NLS-1$
-		intent.putExtra("endTime", getParkingTime()+60*60*1000); //$NON-NLS-1$
+		intent.putExtra("endTime", getParkingTime() + 60 * 60 * 1000); //$NON-NLS-1$
 		view.getContext().startActivity(intent);
 	}
 
@@ -391,7 +409,7 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 	 */
 	private void showDeleteEventWarning(final Activity activity) {
 		if (isParkingEventAdded()) {
-			Builder deleteEventWarning = new AlertDialog.Builder(activity);
+			AlertDialog.Builder deleteEventWarning = new AlertDialog.Builder(activity);
 			deleteEventWarning.setTitle(activity.getString(R.string.osmand_parking_warning));
 			deleteEventWarning.setMessage(activity.getString(R.string.osmand_parking_warning_text));
 			deleteEventWarning.setNeutralButton(R.string.shared_string_ok, new DialogInterface.OnClickListener() {						
@@ -419,7 +437,14 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 			parkingLayer.refresh();
 		}
 	}
-	
+
+	private void cancelParking() {
+		if (parkingLayer != null) {
+			parkingLayer.refresh();
+		}
+		clearParkingPosition();
+	}
+
 	@Override
 	public void registerOptionsMenuItems(final MapActivity mapActivity, ContextMenuAdapter helper) {
     }
@@ -495,7 +520,7 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 			}
 		});
 		parkingPlaceControl.setText(null, null);
-		parkingPlaceControl.setImageDrawable(R.drawable.widget_parking);
+		parkingPlaceControl.setIcons(R.drawable.widget_parking_day, R.drawable.widget_parking_night);
 		return parkingPlaceControl;
 	}
 	
@@ -529,6 +554,52 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 		return timeStringBuilder.toString();
 	}
 
+	String getFormattedTimeInterval(long timeInMillis, Activity ctx) {
+		if (timeInMillis < 0) {
+			timeInMillis *= -1;
+		}
+		StringBuilder timeStringBuilder = new StringBuilder();
+		int hours = (int) timeInMillis / (1000 * 60 * 60);
+		int minMills = (int) timeInMillis % (1000 * 60 * 60);
+		int minutes = minMills / (1000 * 60);
+		if (hours > 0) {
+			timeStringBuilder.append(hours);
+			timeStringBuilder.append(" ");
+			timeStringBuilder.append(ctx.getString(R.string.osmand_parking_hour));
+		}
+
+		if (timeStringBuilder.length() > 0) {
+			timeStringBuilder.append(" ");
+		}
+		timeStringBuilder.append(minutes);
+		timeStringBuilder.append(" ");
+		timeStringBuilder.append(ctx.getString(R.string.osmand_parking_minute));
+
+
+		return timeStringBuilder.toString();
+	}
+
+	public String getParkingStartDesc(Activity ctx) {
+		return ctx.getString(R.string.osmand_parking_position_description_add_time)
+				+ " " + getFormattedTime(getStartParkingTime(), ctx);
+	}
+
+	public String getParkingLeftDesc(Activity ctx) {
+		StringBuilder descr = new StringBuilder();
+		if (getParkingType()) {
+			long endtime = getParkingTime();
+			long currTime = Calendar.getInstance().getTimeInMillis();
+			long timeDiff = endtime - currTime;
+			descr.append(getFormattedTimeInterval(timeDiff, ctx)).append(" ");
+			if (timeDiff < 0) {
+				descr.append(ctx.getString(R.string.osmand_parking_overdue));
+			} else {
+				descr.append(ctx.getString(R.string.osmand_parking_time_left));
+			}
+		}
+		return descr.toString();
+	}
+
 	public String getParkingDescription(Activity ctx) {
 		StringBuilder timeLimitDesc = new StringBuilder();
 		timeLimitDesc.append(ctx.getString(R.string.osmand_parking_position_description_add_time) + " ");
@@ -551,5 +622,10 @@ public class ParkingPositionPlugin extends OsmandPlugin {
 			timeLimitDesc.append(getFormattedTime(getParkingTime(),ctx));
 		}
 		return ctx.getString(R.string.osmand_parking_position_description, timeLimitDesc.toString());
+	}
+
+	@Override
+	public DashFragmentData getCardFragment() {
+		return DashParkingFragment.FRAGMENT_DATA;
 	}
 }

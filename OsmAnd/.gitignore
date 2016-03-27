@@ -1,8 +1,11 @@
 bin/
 dist/
 res/values/no_translate.xml
+res/values/skip_translate.xml
 assets/specialphrases/*
 assets/voice/*
+assets/fonts/*
+assets/feature_articles/*
 gen/
 local.properties
 raw/
@@ -14,6 +17,7 @@ out/
 use/
 osmand.properties
 osmand.xml
+assets/style.css
 assets/help/*.html
 assets/help/images
 assets/help/screens

@@ -1,29 +1,12 @@
 package net.osmand.plus.activities;
 
-import gnu.trove.list.array.TIntArrayList;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
-import net.osmand.Location;
-import net.osmand.TspAnt;
-import net.osmand.access.AccessibleAlertBuilder;
-import net.osmand.data.LatLon;
-import net.osmand.plus.OsmAndFormatter;
-import net.osmand.plus.OsmandApplication;
-import net.osmand.plus.R;
-import net.osmand.plus.TargetPointsHelper;
-import net.osmand.plus.TargetPointsHelper.TargetPoint;
-import net.osmand.util.MapUtils;
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.app.AlertDialog.Builder;
 import android.app.Dialog;
 import android.content.DialogInterface;
 import android.content.DialogInterface.OnShowListener;
 import android.graphics.Color;
 import android.os.AsyncTask;
+import android.support.v7.app.AlertDialog;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
@@ -37,6 +20,23 @@ import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+
+import net.osmand.Location;
+import net.osmand.TspAnt;
+import net.osmand.access.AccessibleAlertBuilder;
+import net.osmand.data.LatLon;
+import net.osmand.plus.OsmAndFormatter;
+import net.osmand.plus.OsmandApplication;
+import net.osmand.plus.R;
+import net.osmand.plus.TargetPointsHelper;
+import net.osmand.plus.TargetPointsHelper.TargetPoint;
+import net.osmand.util.MapUtils;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import gnu.trove.list.array.TIntArrayList;
 
 public class IntermediatePointsDialog {
 
@@ -86,7 +86,7 @@ public class IntermediatePointsDialog {
 			}
 		});
 		
-		Builder builder = new AccessibleAlertBuilder(activity);
+		AlertDialog.Builder builder = new AccessibleAlertBuilder(activity);
 		builder.setView(contentView);
 		builder.setInverseBackgroundForced(true);
 		lv.setBackgroundColor(Color.WHITE);
@@ -255,7 +255,7 @@ public class IntermediatePointsDialog {
 						R.drawable.ic_action_intermediate;
 					tv.setCompoundDrawablesWithIntrinsicBounds(app.getIconsCache().getContentIcon(icon), null, null, null);
 					tv.setCompoundDrawablePadding(padding);
-					final CheckBox ch = ((CheckBox) v.findViewById(R.id.check_item));
+					final CheckBox ch = ((CheckBox) v.findViewById(R.id.toggle_item));
 					ch.setVisibility(View.VISIBLE);
 					ch.setOnCheckedChangeListener(null);
 					ch.setChecked(checkedIntermediates[position]);
@@ -283,7 +283,7 @@ public class IntermediatePointsDialog {
 			boolean changeDestinationFlag = !checkedIntermediates[checkedIntermediates.length - 1];
 			if (cnt == checkedIntermediates.length) { // there is no alternative destination if all points are to be
 														// removed?
-				app.getTargetPointsHelper().removeAllWayPoints(true);
+				app.getTargetPointsHelper().removeAllWayPoints(true, true);
 			} else {
 				for (int i = checkedIntermediates.length - 2; i >= 0; i--) { // skip the destination until a retained
 																				// waypoint is found
@@ -296,10 +296,6 @@ public class IntermediatePointsDialog {
 						app.getTargetPointsHelper().removeWayPoint(cnt == 0, i);
 					}
 				}
-				// FIXME delete location when point is removed
-				// if(mapActivity instanceof MapActivity) {
-				// ((MapActivity) mapActivity).getMapLayers().getContextMenuLayer().setLocation(null, "");
-				// }
 			}
 		}
 	}

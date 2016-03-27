@@ -1,10 +1,10 @@
 package net.osmand.plus.parkingpoint;
 
-import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
+import android.support.v7.app.AlertDialog;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -18,6 +18,8 @@ import net.osmand.plus.OsmandPlugin;
 import net.osmand.plus.R;
 import net.osmand.plus.activities.MapActivity;
 import net.osmand.plus.dashboard.DashLocationFragment;
+import net.osmand.plus.dashboard.DashboardOnMap;
+import net.osmand.plus.dashboard.tools.DashFragmentData;
 import net.osmand.plus.helpers.FontCache;
 
 import java.util.Calendar;
@@ -27,11 +29,23 @@ import java.util.Calendar;
  * 26.01.2015.
  */
 public class DashParkingFragment extends DashLocationFragment {
-	public static final String TAG = "DASH_PARKING_FRAGMENT";
+	private static final String TAG = "DASH_PARKING_FRAGMENT";
+	private static final int TITLE_ID = R.string.osmand_parking_plugin_name;
 	ParkingPositionPlugin plugin;
 
+	private static final DashFragmentData.ShouldShowFunction SHOULD_SHOW_FUNCTION =
+			new DashboardOnMap.DefaultShouldShow() {
+				@Override
+				public int getTitleId() {
+					return TITLE_ID;
+				}
+			};
+	static final DashFragmentData FRAGMENT_DATA = new DashFragmentData(
+			DashParkingFragment.TAG, DashParkingFragment.class,
+			SHOULD_SHOW_FUNCTION, 50, null);
+
 	@Override
-	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+	public View initView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 		View view = getActivity().getLayoutInflater().inflate(R.layout.dash_parking_fragment, container, false);
 		Typeface typeface = FontCache.getRobotoMedium(getActivity());
 		Button remove = (Button) view.findViewById(R.id.remove_tag);
@@ -54,7 +68,7 @@ public class DashParkingFragment extends DashLocationFragment {
 			public void onClick(View v) {
 				LatLon point = plugin.getParkingPosition();
 				getMyApplication().getSettings().setMapLocationToShow(point.getLatitude(), point.getLongitude(),
-						15, new PointDescription(PointDescription.POINT_TYPE_FAVORITE, plugin.getParkingDescription(getActivity())), false,
+						15, new PointDescription(PointDescription.POINT_TYPE_PARKING_MARKER, getString(R.string.osmand_parking_position_name)), false,
 						point); //$NON-NLS-1$
 				MapActivity.launchMapActivityMoveToTop(getActivity());
 			}
@@ -114,7 +128,7 @@ public class DashParkingFragment extends DashLocationFragment {
 		if (loc != null) {
 			DashLocationView dv = new DashLocationView(direction, (TextView) mainView.findViewById(R.id.distance), position);
 			dv.paint = false;
-			dv.arrowResId = R.drawable.ic_parking_postion_arrow;
+			dv.arrowResId = R.drawable.ic_action_start_navigation; 
 			distances.add(dv);
 		}
 

@@ -32,6 +32,7 @@ public abstract class DashLocationFragment extends DashBaseFragment {
 	private static final int ORIENTATION_180 = 2;
 	protected List<DashLocationView> distances = new ArrayList<DashLocationFragment.DashLocationView>();
 	private int screenOrientation;
+	protected LatLon lastUpdatedLocation;
 
 	public static class DashLocationView {
 		public ImageView arrow;
@@ -103,51 +104,51 @@ public abstract class DashLocationFragment extends DashBaseFragment {
 		boolean useCenter = !mapLinked;
 		LatLon loc = (useCenter ? mw : myLoc);
 		float h = useCenter ? -mapRotation : head;
+		lastUpdatedLocation = loc;
 		for (DashLocationView lv : distances) {
-			if (lv.loc != null){
-				updateLocationView(useCenter, loc, h, lv.arrow, lv.arrowResId, lv.txt, lv.loc.getLatitude(), lv.loc.getLongitude(),
-						screenOrientation, getMyApplication(), getActivity(), lv.paint);
-			}
-
+			updateLocationView(useCenter, loc, h, lv.arrow, lv.arrowResId, lv.txt, lv.loc, screenOrientation,
+					getMyApplication(), getActivity(), lv.paint);
 		}
 	}
 
 	public static void updateLocationView(boolean useCenter, LatLon fromLoc, Float h,
 										  ImageView arrow, TextView txt, double toLat, double toLon,
 										  int screenOrientation, OsmandApplication app, Context ctx) {
-		updateLocationView(useCenter, fromLoc, h, arrow, 0, txt, toLat, toLon, screenOrientation, app, ctx, true);
+		updateLocationView(useCenter, fromLoc, h, arrow, 0, txt, new LatLon(toLat, toLon), screenOrientation, app, ctx, true);
 	}
 
 	public static void updateLocationView(boolean useCenter, LatLon fromLoc, Float h,
-										  ImageView arrow, int arrowResId, TextView txt, double toLat, double toLon,
+										  ImageView arrow, int arrowResId, TextView txt, LatLon toLoc,
 										  int screenOrientation, OsmandApplication app, Context ctx, boolean paint) {
 		float[] mes = new float[2];
-		if (fromLoc != null) {
-			Location.distanceBetween(toLat, toLon, fromLoc.getLatitude(), fromLoc.getLongitude(), mes);
+		if (fromLoc != null && toLoc != null) {
+			Location.distanceBetween(toLoc.getLatitude(), toLoc.getLongitude(), fromLoc.getLatitude(), fromLoc.getLongitude(), mes);
 		}
 		if (arrow != null) {
-			if (!(arrow.getDrawable() instanceof DirectionDrawable)) {
-				DirectionDrawable dd = new DirectionDrawable(ctx, 10, 10);
-				arrow.setImageDrawable(dd);
-			}
+			boolean newImage = false;
 			if (arrowResId == 0) {
 				arrowResId = R.drawable.ic_destination_arrow_white;
 			}
-			DirectionDrawable dd = (DirectionDrawable) arrow.getDrawable();
-			if (paint) {
-				dd.setImage(arrowResId, useCenter ? R.color.color_distance : R.color.color_myloc_distance);
+			DirectionDrawable dd;
+			if(!(arrow.getDrawable() instanceof DirectionDrawable)) {
+				newImage = true;
+				dd = new DirectionDrawable(ctx, arrow.getWidth(), arrow.getHeight());
 			} else {
-				dd.setImage(arrowResId, useCenter ? R.color.color_distance : R.color.color_white);
+				dd = (DirectionDrawable) arrow.getDrawable();
 			}
-			if (fromLoc == null || h == null) {
+			dd.setImage(arrowResId, useCenter ? R.color.color_distance : R.color.color_myloc_distance);
+			if (fromLoc == null || h == null || toLoc == null) {
 				dd.setAngle(0);
 			} else {
 				dd.setAngle(mes[1] - h + 180 + screenOrientation);
 			}
+			if (newImage) {
+				arrow.setImageDrawable(dd);
+			}
 			arrow.invalidate();
 		}
 		if (txt != null) {
-			if (fromLoc != null) {
+			if (fromLoc != null && toLoc != null) {
 				if (paint) {
 					txt.setTextColor(app.getResources().getColor(
 							useCenter ? R.color.color_distance : R.color.color_myloc_distance));

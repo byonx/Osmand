@@ -1,17 +1,28 @@
 package net.osmand.util;
 
 
+import net.osmand.IProgress;
+import net.osmand.PlatformUtil;
+
+import org.apache.commons.logging.Log;
+
+import java.io.BufferedReader;
 import java.io.Closeable;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
-
-import net.osmand.PlatformUtil;
-
-import org.apache.commons.logging.Log;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
 
 
 /**
@@ -24,7 +35,19 @@ public class Algorithms {
 	public static boolean isEmpty(String s){
 		return s == null || s.length() == 0;
 	}
-	
+
+	public static boolean stringsEqual(String s1, String s2) {
+		if (s1 == null && s2 == null) {
+			return true;
+		} else if (s1 == null) {
+			return false;
+		} else if (s2 == null) {
+			return false;
+		} else {
+			return s2.equals(s1);
+		}
+	}
+
 	public static long parseLongSilently(String input, long def) {
 		if(input != null && input.length() > 0) {
 			try {
@@ -36,13 +59,93 @@ public class Algorithms {
 		return def;
 	}
 	
+	
+	public static String getFileNameWithoutExtension(File f) {
+		String name = f.getName();
+		int i = name.indexOf('.');
+		if(i >= 0) {
+			name = name.substring(0, i);
+		}
+		return name;
+	}
+	
+	
+	
+	public static File[] getSortedFilesVersions(File dir){
+		File[] listFiles = dir.listFiles();
+		if (listFiles != null) {
+			Arrays.sort(listFiles, getFileVersionComparator());
+		}
+		return listFiles;
+	}
+
+	public static Comparator<File> getFileVersionComparator() {
+		return new Comparator<File>() {
+			@Override
+			public int compare(File o1, File o2) {
+				return -simplifyFileName(o1.getName()).compareTo(simplifyFileName(o2.getName()));
+			}
+			
+			public String simplifyFileName(String fn) {
+				String lc = fn.toLowerCase();
+				if (lc.indexOf(".") != -1) {
+					lc = lc.substring(0, lc.indexOf("."));
+				}
+				if (lc.endsWith("_2")) {
+					lc = lc.substring(0, lc.length() - "_2".length());
+				}
+				boolean hasTimestampEnd = false;
+				for(int i = 0; i < lc.length(); i++) {
+					if(lc.charAt(i) >= '0' && lc.charAt(i) <= '9') {
+						hasTimestampEnd = true;
+						break;
+					}
+				}
+				if(!hasTimestampEnd) {
+					lc += "_00_00_00";
+				}
+				return lc;
+			}
+		};
+	}
+	
+	private static final char CHAR_TOSPLIT = 0x01;
+
+	public static Map<String, String> decodeMap(String s) {
+		if (isEmpty(s)) {
+			return Collections.emptyMap();
+		}
+		Map<String, String> names = new HashMap<String, String>();
+		String[] split = s.split(CHAR_TOSPLIT + "");
+		// last split is an empty string
+		for (int i = 1; i < split.length; i += 2) {
+			names.put(split[i - 1], split[i]);
+		}
+		return names;
+	}
+	
+	public static String encodeMap(Map<String, String> names) {
+		if (names != null) {
+			Iterator<Entry<String, String>> it = names.entrySet().iterator();
+			StringBuilder bld = new StringBuilder();
+			while (it.hasNext()) {
+				Entry<String, String> e = it.next();
+				bld.append(e.getKey()).append(CHAR_TOSPLIT)
+						.append(e.getValue().replace(CHAR_TOSPLIT, (char)(CHAR_TOSPLIT + 1)));
+				bld.append(CHAR_TOSPLIT);
+			}
+			return bld.toString();
+		}
+		return "";
+	}
+	
 	public static int findFirstNumberEndIndex(String value) {
 		int i = 0;
 		boolean valid = false;
 		if (value.length() > 0 && value.charAt(0) == '-') {
 			i++;
 		}
-		while (i < value.length() && (Character.isDigit(value.charAt(i)) || value.charAt(i) == '.')) {
+		while (i < value.length() && (isDigit(value.charAt(i)) || value.charAt(i) == '.')) {
 			i++;
 			valid = true;
 		}
@@ -53,6 +156,10 @@ public class Algorithms {
 		}
 	}
 	
+	public static boolean isDigit(char charAt) {
+		return charAt >= '0' && charAt <= '9';
+	}
+
 	/**
 	 * Determine whether a file is a ZIP File.
 	 */
@@ -113,6 +220,13 @@ public class Algorithms {
     	public static int parseColor(String colorString) {
         	if (colorString.charAt(0) == '#') {
             	// Use a long to avoid rollovers on #ffXXXXXX
+        		if (colorString.length() == 4) {
+            		colorString = "#" + 
+            				colorString.charAt(1) + colorString.charAt(1) +
+            				colorString.charAt(2) + colorString.charAt(2) +
+            				colorString.charAt(3) + colorString.charAt(3);
+            				
+            	}
             	long color = Long.parseLong(colorString.substring(1), 16);
             	if (colorString.length() == 7) {
 	                // Set the alpha value
@@ -125,16 +239,55 @@ public class Algorithms {
         	throw new IllegalArgumentException("Unknown color " + colorString); //$NON-NLS-1$
     	}
 	
+    	
 	public static int extractFirstIntegerNumber(String s) {
 		int i = 0;
 		for (int k = 0; k < s.length(); k++) {
-			if (Character.isDigit(s.charAt(k))) {
+			if (isDigit(s.charAt(k))) {
 				i = i * 10 + (s.charAt(k) - '0');
 			} else {
 				break;
 			}
 		}
 		return i;
+	}
+	
+	public static int extractIntegerNumber(String s) {
+		int i = 0;
+		int k = 0;
+		for (k = 0; k < s.length(); k++) {
+			if (isDigit(s.charAt(k))) {
+				break;
+			}
+		}
+		for (; k < s.length(); k++) {
+			if (isDigit(s.charAt(k))) {
+				i = i * 10 + (s.charAt(k) - '0');
+			} else {
+				break;
+			}
+		}
+		return i;
+	}
+	
+	public static String extractIntegerPrefix(String s) {
+		int k = 0;
+		for (; k < s.length(); k++) {
+			if (Character.isDigit(s.charAt(k))) {
+				return s.substring(0, k);
+			}
+		}
+		return "";
+	}
+	
+	public static String extractOnlyIntegerSuffix(String s) {
+		int k = 0;
+		for (; k < s.length(); k++) {
+			if (Character.isDigit(s.charAt(k))) {
+				return s.substring(k);
+			}
+		}
+		return "";
 	}
 	
 	public static String extractIntegerSuffix(String s) {
@@ -148,11 +301,39 @@ public class Algorithms {
 	}
 	
 	
+	public static void fileCopy(File src, File dst) throws IOException {
+		FileOutputStream fout = new FileOutputStream(dst);
+		try {
+			FileInputStream fin = new FileInputStream(src);
+			try {
+				Algorithms.streamCopy(fin, fout);
+			} finally {
+				fin.close();
+			}
+		} finally {
+			fout.close();
+		}
+	}
 	public static void streamCopy(InputStream in, OutputStream out) throws IOException{
 		byte[] b = new byte[BUFFER_SIZE];
 		int read;
 		while ((read = in.read(b)) != -1) {
 			out.write(b, 0, read);
+		}
+	}
+	
+	
+	public static void streamCopy(InputStream in, OutputStream out, IProgress pg, int bytesDivisor) throws IOException{
+		byte[] b = new byte[BUFFER_SIZE];
+		int read;
+		int cp = 0;
+		while ((read = in.read(b)) != -1) {
+			out.write(b, 0, read);
+			cp += read;
+			if(pg != null && cp > bytesDivisor) {
+				pg.progress(cp / bytesDivisor);
+				cp = cp % bytesDivisor; 
+			}
 		}
 	}
 	
@@ -184,6 +365,25 @@ public class Algorithms {
 			f.renameTo(new File(f.getAbsolutePath().substring(0, f.getAbsolutePath().length() - ".andnav2".length()) + ".tile")); //$NON-NLS-1$ //$NON-NLS-2$
 		}
 			
+	}
+	
+	public static StringBuilder readFromInputStream(InputStream i) throws IOException {
+		StringBuilder responseBody = new StringBuilder();
+		responseBody.setLength(0);
+		if (i != null) {
+			BufferedReader in = new BufferedReader(new InputStreamReader(i, "UTF-8"), 256); //$NON-NLS-1$
+			String s;
+			boolean f = true;
+			while ((s = in.readLine()) != null) {
+				if (!f) {
+					responseBody.append("\n"); //$NON-NLS-1$
+				} else {
+					f = false;
+				}
+				responseBody.append(s);
+			}
+		}
+		return responseBody;
 	}
 	
 	public static boolean removeAllFiles(File f) {
@@ -336,6 +536,16 @@ public class Algorithms {
 			return hours + ":" + min + ":" + sec;
 		}
 	}
+
+	public static String formatMinutesDuration(int minutes) {
+		if (minutes < 60) {
+			return String.valueOf(minutes);
+		} else {
+			int min = minutes % 60;
+			int hours = minutes / 60;
+			return String.format("%02d:%02d", hours, min);
+		}
+	}
 	
 	public static <T extends Enum<T> > T parseEnumValue(T[] cl, String val, T defaultValue){
 		for(int i = 0; i< cl.length; i++) {
@@ -348,9 +558,16 @@ public class Algorithms {
 
 	public static String colorToString(int color) {
 		if ((0xFF000000 & color) == 0xFF000000) {
-			return "#" + Integer.toHexString(color & 0x00FFFFFF); //$NON-NLS-1$
+			return "#" + format(6, Integer.toHexString(color & 0x00FFFFFF)); //$NON-NLS-1$
 		} else {
-			return "#" + Integer.toHexString(color); //$NON-NLS-1$
+			return "#" + format(8, Integer.toHexString(color)); //$NON-NLS-1$
 		}
+	}
+
+	private static String format(int i, String hexString) {
+		while(hexString.length() < i) {
+			hexString = "0" + hexString;
+		}
+		return hexString;
 	}
 }

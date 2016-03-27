@@ -106,16 +106,14 @@ public class AsyncLoadingThread extends Thread {
 					} else if (req instanceof MapLoadRequest) {
 						if (!mapLoaded) {
 							MapLoadRequest r = (MapLoadRequest) req;
-							resourceManger.getRenderer().loadMap(r.tileBox, resourceManger.getMapTileDownloader().getDownloaderCallbacks());
-							mapLoaded = true;
+							resourceManger.getRenderer().loadMap(r.tileBox, resourceManger.getMapTileDownloader());
+							mapLoaded = !resourceManger.getRenderer().wasInterrupted();
 						}
 					}
 				}
 				if (tileLoaded || amenityLoaded || transportLoaded || mapLoaded) {
 					// use downloader callback
-					for (IMapDownloaderCallback c : resourceManger.getMapTileDownloader().getDownloaderCallbacks()) {
-						c.tileDownloaded(null);
-					}
+					resourceManger.getMapTileDownloader().fireLoadCallback(null);
 				}
 				int newProgress = calculateProgressStatus();
 				if (progress != newProgress) {
@@ -170,6 +168,15 @@ public class AsyncLoadingThread extends Thread {
 			this.dirWithTiles = dirWithTiles;
 			this.tileSource = source;
 			this.tileId = tileId;
+		}
+		
+		public TileLoadDownloadRequest(File dirWithTiles, String url, File fileToSave, String tileId, ITileSource source, int tileX,
+				int tileY, int zoom, String referer) {
+			super(url, fileToSave, tileX, tileY, zoom);
+			this.dirWithTiles = dirWithTiles;
+			this.tileSource = source;
+			this.tileId = tileId;
+			this.referer = referer;
 		}
 		
 		public void saveTile(InputStream inputStream) throws IOException {
@@ -229,10 +236,7 @@ public class AsyncLoadingThread extends Thread {
 		public void finish() {
 			running = false;
 			// use downloader callback
-			ArrayList<IMapDownloaderCallback> ls = new ArrayList<IMapDownloaderCallback>(resourceManger.getMapTileDownloader().getDownloaderCallbacks());
-			for (IMapDownloaderCallback c : ls) {
-				c.tileDownloaded(null);
-			}
+			resourceManger.getMapTileDownloader().fireLoadCallback(null);
 		}
 
 		@Override

@@ -1,30 +1,26 @@
 package net.osmand.plus.audionotes;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import net.osmand.data.PointDescription;
-import net.osmand.plus.OsmAndAppCustomization;
-import net.osmand.plus.OsmandApplication;
-import net.osmand.plus.OsmandPlugin;
-import net.osmand.plus.R;
-import net.osmand.plus.activities.MapActivity;
-import net.osmand.plus.dashboard.DashBaseFragment;
-import net.osmand.plus.helpers.FontCache;
-import net.osmand.plus.myplaces.FavoritesActivity;
-import android.app.Activity;
-import android.content.Intent;
-import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+
+import net.osmand.data.PointDescription;
+import net.osmand.plus.OsmandApplication;
+import net.osmand.plus.OsmandPlugin;
+import net.osmand.plus.R;
+import net.osmand.plus.activities.MapActivity;
+import net.osmand.plus.dashboard.DashBaseFragment;
+import net.osmand.plus.dashboard.DashboardOnMap;
+import net.osmand.plus.dashboard.tools.DashFragmentData;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by Denis
@@ -33,40 +29,53 @@ import android.widget.TextView;
 public class DashAudioVideoNotesFragment extends DashBaseFragment {
 
 	public static final String TAG = "DASH_NOTES_FRAGMENT";
+	public static final int TITLE_ID = R.string.map_widget_av_notes;
+	private static final String ROW_NUMBER_TAG = TAG + "_row_number";
+	private static final DashFragmentData.ShouldShowFunction SHOULD_SHOW_FUNCTION =
+			new DashboardOnMap.DefaultShouldShow() {
+				@Override
+				public int getTitleId() {
+					return TITLE_ID;
+				}
+			};
+	static final DashFragmentData FRAGMENT_DATA = new DashFragmentData(
+			TAG, DashAudioVideoNotesFragment.class, SHOULD_SHOW_FUNCTION, 100, ROW_NUMBER_TAG);
+
 
 	AudioVideoNotesPlugin plugin;
 
 	@Override
-	public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+	public View initView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
 		plugin = OsmandPlugin.getEnabledPlugin(AudioVideoNotesPlugin.class);
 		View view = getActivity().getLayoutInflater().inflate(R.layout.dash_common_fragment, container, false);
-		((TextView) view.findViewById(R.id.fav_text)).setText(R.string.map_widget_av_notes);
+		((TextView) view.findViewById(R.id.fav_text)).setText(TITLE_ID);
 		(view.findViewById(R.id.show_all)).setOnClickListener(new View.OnClickListener() {
 			@Override
 			public void onClick(View view) {
-				startFavoritesActivity(FavoritesActivity.NOTES_TAB);
+				startFavoritesActivity(AudioVideoNotesPlugin.NOTES_TAB);
+				closeDashboard();
 			}
 		});
 		return view;
 	}
-	
+
 	@Override
 	public void onOpenDash() {
 		if (plugin == null) {
 			plugin = OsmandPlugin.getEnabledPlugin(AudioVideoNotesPlugin.class);
 		}
-		setupNotes();		
+		setupNotes();
 	}
-	
+
 	public void setupNotes() {
 		View mainView = getView();
-		if (plugin == null){
+		if (plugin == null) {
 			mainView.setVisibility(View.GONE);
 			return;
 		}
 
 		List<AudioVideoNotesPlugin.Recording> notes = new ArrayList<AudioVideoNotesPlugin.Recording>(plugin.getAllRecordings());
-		if (notes.size() == 0){
+		if (notes.size() == 0) {
 			mainView.setVisibility(View.GONE);
 			return;
 		} else {
@@ -75,17 +84,15 @@ public class DashAudioVideoNotesFragment extends DashBaseFragment {
 
 		LinearLayout notesLayout = (LinearLayout) mainView.findViewById(R.id.items);
 		notesLayout.removeAllViews();
-		if (notes.size() > 3){
-			while (notes.size() != 3){
-				notes.remove(3);
-			}
-		}
+		DashboardOnMap.handleNumberOfRows(notes, getMyApplication().getSettings(), ROW_NUMBER_TAG);
 
 		for (final AudioVideoNotesPlugin.Recording recording : notes) {
 			LayoutInflater inflater = getActivity().getLayoutInflater();
 			View view = inflater.inflate(R.layout.note, null, false);
 
 			getNoteView(recording, view, getMyApplication());
+			((ImageView) view.findViewById(R.id.play)).setImageDrawable(getMyApplication().getIconsCache()
+					.getContentIcon(R.drawable.ic_play_dark));
 			view.findViewById(R.id.play).setOnClickListener(new View.OnClickListener() {
 				@Override
 				public void onClick(View v) {
@@ -99,7 +106,7 @@ public class DashAudioVideoNotesFragment extends DashBaseFragment {
 				public void onClick(View v) {
 					getMyApplication().getSettings().setMapLocationToShow(recording.getLatitude(),
 							recording.getLongitude(), 15,
-							new PointDescription(recording.getSearchHistoryType(), recording.getName(getActivity())),
+							new PointDescription(recording.getSearchHistoryType(), recording.getName(getActivity(), true)),
 							true, recording); //$NON-NLS-1$
 					MapActivity.launchMapActivityMoveToTop(getActivity());
 				}
@@ -107,17 +114,17 @@ public class DashAudioVideoNotesFragment extends DashBaseFragment {
 			notesLayout.addView(view);
 		}
 	}
-	
+
 	public static Drawable getNoteView(final AudioVideoNotesPlugin.Recording recording, View view,
-								   final OsmandApplication ctx) {
-		String name = recording.getName(ctx);
+									   final OsmandApplication ctx) {
+		String name = recording.getName(ctx, true);
 		TextView nameText = ((TextView) view.findViewById(R.id.name));
 		nameText.setText(name);
-		((TextView) view.findViewById(R.id.descr)).setText(recording.getSmallDescription(ctx));
+		((TextView) view.findViewById(R.id.description)).setText(recording.getSmallDescription(ctx));
 
 		ImageView icon = (ImageView) view.findViewById(R.id.icon);
 		Drawable iconDrawable;
-		
+
 		if (recording.isAudio()) {
 			iconDrawable = ctx.getIconsCache().getIcon(R.drawable.ic_type_audio, R.color.color_distance);
 		} else if (recording.isVideo()) {

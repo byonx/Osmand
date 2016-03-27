@@ -1,30 +1,29 @@
 package net.osmand.plus.views;
 
-import java.util.ArrayList;
-import java.util.List;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.PointF;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 
-import net.osmand.access.AccessibleToast;
 import net.osmand.data.FavouritePoint;
 import net.osmand.data.LatLon;
 import net.osmand.data.LocationPoint;
 import net.osmand.data.PointDescription;
 import net.osmand.data.QuadRect;
+import net.osmand.data.QuadTree;
 import net.osmand.data.RotatedTileBox;
-import net.osmand.plus.ContextMenuAdapter;
-import net.osmand.plus.ContextMenuAdapter.OnContextMenuClick;
 import net.osmand.plus.FavouritesDbHelper;
+import net.osmand.plus.OsmandSettings;
 import net.osmand.plus.R;
 import net.osmand.plus.base.FavoriteImageDrawable;
 import net.osmand.plus.views.MapTextLayer.MapTextProvider;
-import android.app.AlertDialog;
-import android.app.AlertDialog.Builder;
-import android.content.DialogInterface;
-import android.content.res.Resources;
-import android.graphics.Canvas;
-import android.graphics.Paint;
-import android.graphics.PointF;
-import android.widget.ArrayAdapter;
-import android.widget.Toast;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class FavoritesLayer  extends OsmandMapLayer implements ContextMenuLayer.IContextMenuProvider, MapTextProvider<LocationPoint> {
 
@@ -35,8 +34,11 @@ public class FavoritesLayer  extends OsmandMapLayer implements ContextMenuLayer.
 	private FavouritesDbHelper favorites;
 	protected List<LocationPoint> cache = new ArrayList<LocationPoint>();
 	private MapTextLayer textLayer;
-//	private Bitmap d;
+	private Paint paintIcon;
+	private Bitmap pointSmall;
+	private int defaultColor;
 
+	private OsmandSettings settings;
 	
 	protected Class<? extends LocationPoint> getFavoriteClass() {
 		return (Class<? extends LocationPoint>) FavouritePoint.class;
@@ -57,11 +59,12 @@ public class FavoritesLayer  extends OsmandMapLayer implements ContextMenuLayer.
 		paint.setAntiAlias(true);
 		paint.setFilterBitmap(true);
 		paint.setDither(true);
-		
+		settings = view.getApplication().getSettings();
 		favorites = view.getApplication().getFavorites();
 		textLayer = view.getLayerByClass(MapTextLayer.class);
-//		favoriteIcon = BitmapFactory.decodeResource(view.getResources(), R.drawable.poi_favourite);
-		
+		paintIcon = new Paint();
+		pointSmall = BitmapFactory.decodeResource(view.getResources(), R.drawable.map_white_shield_small);
+		defaultColor = view.getResources().getColor(R.color.color_favorite);
 	}
 	
 	private boolean calculateBelongs(int ex, int ey, int objx, int objy, int radius) {
@@ -89,17 +92,45 @@ public class FavoritesLayer  extends OsmandMapLayer implements ContextMenuLayer.
 	@Override
 	public void onPrepareBufferImage(Canvas canvas, RotatedTileBox tileBox, DrawSettings settings) {
 		cache.clear();
-		if (tileBox.getZoom() >= startZoom) {
-			// request to load
-			final QuadRect latLonBounds = tileBox.getLatLonBounds();
-			for (LocationPoint o : getPoints()) {
-				drawPoint(canvas, tileBox, latLonBounds, o);
+		if (this.settings.SHOW_FAVORITES.get()) {
+			if (tileBox.getZoom() >= startZoom) {
+				float iconSize = FavoriteImageDrawable.getOrCreate(view.getContext(), 0,
+						 true).getIntrinsicWidth() * 3 / 2.5f;
+				QuadTree<QuadRect> boundIntersections = initBoundIntersections(tileBox);
+
+				// request to load
+				final QuadRect latLonBounds = tileBox.getLatLonBounds();
+				List<LocationPoint> fullObjects = new ArrayList<>();
+				List<LatLon> fullObjectsLatLon = new ArrayList<>();
+				List<LatLon> smallObjectsLatLon = new ArrayList<>();
+				for (LocationPoint o : getPoints()) {
+					if (!o.isVisible()) {
+						continue;
+					}
+					float x = tileBox.getPixXFromLatLon(o.getLatitude(), o.getLongitude());
+					float y = tileBox.getPixYFromLatLon(o.getLatitude(), o.getLongitude());
+
+					if (intersects(boundIntersections, x, y, iconSize, iconSize)) {
+						int col = o.getColor() == 0 || o.getColor() == Color.BLACK ? defaultColor : o.getColor();
+						paintIcon.setColorFilter(new PorterDuffColorFilter(col, PorterDuff.Mode.MULTIPLY));
+						canvas.drawBitmap(pointSmall, x - pointSmall.getWidth() / 2, y - pointSmall.getHeight() / 2, paintIcon);
+						smallObjectsLatLon.add(new LatLon(o.getLatitude(), o.getLongitude()));
+					} else {
+						fullObjects.add(o);
+						fullObjectsLatLon.add(new LatLon(o.getLatitude(), o.getLongitude()));
+					}
+				}
+				for (LocationPoint o : fullObjects) {
+					drawPoint(canvas, tileBox, latLonBounds, o);
+				}
+				this.fullObjectsLatLon = fullObjectsLatLon;
+				this.smallObjectsLatLon = smallObjectsLatLon;
 			}
-			
 		}
 		if(textLayer.isVisible()) {
 			textLayer.putData(this, cache);
 		}
+
 	}
 
 
@@ -109,8 +140,8 @@ public class FavoritesLayer  extends OsmandMapLayer implements ContextMenuLayer.
 			cache.add(o);
 			int x = (int) tileBox.getPixXFromLatLon(o.getLatitude(), o.getLongitude());
 			int y = (int) tileBox.getPixYFromLatLon(o.getLatitude(), o.getLongitude());
-			FavoriteImageDrawable fid = FavoriteImageDrawable.getOrCreate(view.getContext(), o.getColor());
-			fid.drawBitmapInCenter(canvas, x, y, tileBox.getDensity());
+			FavoriteImageDrawable fid = FavoriteImageDrawable.getOrCreate(view.getContext(), o.getColor(), true);
+			fid.drawBitmapInCenter(canvas, x, y);
 //					canvas.drawBitmap(favoriteIcon, x - favoriteIcon.getWidth() / 2, 
 //							y - favoriteIcon.getHeight(), paint);
 		}
@@ -143,33 +174,10 @@ public class FavoritesLayer  extends OsmandMapLayer implements ContextMenuLayer.
 	}
 
 	@Override
-	public boolean onSingleTap(PointF point, RotatedTileBox tileBox) {
-		List<LocationPoint> favs = new ArrayList<LocationPoint>();
-		getFavoriteFromPoint(tileBox, point, favs);
-		if(!favs.isEmpty() && (tileBox.getZoom() > 14 || favs.size() < 6)){
-			StringBuilder res = new StringBuilder();
-			int i = 0;
-			for(LocationPoint fav : favs) {
-				if (i++ > 0) {
-					res.append("\n");
-				}
-				res.append(PointDescription.getSimpleName(fav, view.getContext()));  //$NON-NLS-1$
-			}
-			AccessibleToast.makeText(view.getContext(), res.toString(), Toast.LENGTH_LONG).show();
-			return true;
-		}
-		return false;
-	}
-
-
-	@Override
 	public String getObjectDescription(Object o) {
 		Class<? extends LocationPoint> fcl = getFavoriteClass();
 		if(o!= null && fcl.isInstance(o)) {
-			String desciption = ((FavouritePoint)o).getDescription() != null ?
-					" " + ((FavouritePoint)o).getDescription() : "";
-			return PointDescription.getSimpleName((LocationPoint) o, view.getContext()) + " "
-					+ desciption; //$NON-NLS-1$
+			return PointDescription.getSimpleName((LocationPoint) o, view.getContext()) ;
 		}
 		return null;
 	}
@@ -185,8 +193,25 @@ public class FavoritesLayer  extends OsmandMapLayer implements ContextMenuLayer.
 	}
 
 	@Override
+	public boolean disableSingleTap() {
+		return false;
+	}
+
+	@Override
+	public boolean disableLongPressOnMap() {
+		return false;
+	}
+
+	@Override
+	public boolean isObjectClickable(Object o) {
+		return o instanceof LocationPoint;
+	}
+
+	@Override
 	public void collectObjectsFromPoint(PointF point, RotatedTileBox tileBox, List<Object> res) {
-		getFavoriteFromPoint(tileBox, point, res);
+		if (this.settings.SHOW_FAVORITES.get() && tileBox.getZoom() >= startZoom) {
+			getFavoriteFromPoint(tileBox, point, res);
+		}
 	}
 
 	@Override
@@ -195,36 +220,6 @@ public class FavoritesLayer  extends OsmandMapLayer implements ContextMenuLayer.
 			return new LatLon(((LocationPoint)o).getLatitude(), ((LocationPoint)o).getLongitude());
 		}
 		return null;
-	}
-	
-	@Override
-	public void populateObjectContextMenu(Object o, ContextMenuAdapter adapter) {
-		if(o instanceof FavouritePoint) {
-			final FavouritePoint a = (FavouritePoint) o;
-			OnContextMenuClick listener = new ContextMenuAdapter.OnContextMenuClick() {
-				@Override
-				public boolean onContextMenuClick(ArrayAdapter<?> adapter, int itemId, int pos, boolean isChecked) {
-					if (itemId == R.string.favourites_context_menu_delete) {
-						final Resources resources = view.getContext().getResources();
-						Builder builder = new AlertDialog.Builder(view.getContext());
-						builder.setMessage(resources.getString(R.string.favourites_remove_dialog_msg, a.getName()));
-						builder.setNegativeButton(R.string.shared_string_no, null);
-						builder.setPositiveButton(R.string.shared_string_yes, new DialogInterface.OnClickListener() {
-							@Override
-							public void onClick(DialogInterface dialog, int which) {
-								favorites.deleteFavourite(a);
-								view.refreshMap();
-							}
-						});
-						builder.create().show();
-					}
-					return true;
-				}
-			};
-			adapter.item(R.string.favourites_context_menu_delete)
-						.iconColor(R.drawable.ic_action_delete_dark).listen(listener)
-						.reg();
-		}
 	}
 
 	@Override

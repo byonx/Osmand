@@ -1,13 +1,22 @@
 package net.osmand.plus.monitoring;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
+import android.app.Activity;
+import android.content.Intent;
+import android.os.Bundle;
+import android.os.Handler;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageButton;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import net.osmand.IndexConstants;
 import net.osmand.access.AccessibleToast;
 import net.osmand.plus.GPXUtilities;
 import net.osmand.plus.GPXUtilities.GPXFile;
+import net.osmand.plus.GpxSelectionHelper;
 import net.osmand.plus.GpxSelectionHelper.SelectedGpxFile;
 import net.osmand.plus.OsmAndAppCustomization;
 import net.osmand.plus.OsmandApplication;
@@ -16,23 +25,15 @@ import net.osmand.plus.OsmandSettings;
 import net.osmand.plus.R;
 import net.osmand.plus.activities.MapActivity;
 import net.osmand.plus.dashboard.DashBaseFragment;
-import net.osmand.plus.helpers.FontCache;
+import net.osmand.plus.dashboard.DashboardOnMap;
+import net.osmand.plus.dashboard.tools.DashFragmentData;
 import net.osmand.plus.helpers.GpxUiHelper;
 import net.osmand.plus.myplaces.AvailableGPXFragment;
 import net.osmand.plus.myplaces.FavoritesActivity;
-import android.app.Activity;
-import android.content.Intent;
-import android.graphics.Typeface;
-import android.os.Bundle;
-import android.os.Handler;
-import android.view.LayoutInflater;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.ImageButton;
-import android.widget.LinearLayout;
-import android.widget.TextView;
-import android.widget.Toast;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by Denis
@@ -41,14 +42,27 @@ import android.widget.Toast;
 public class DashTrackFragment extends DashBaseFragment {
 
 	public static final String TAG = "DASH_TRACK_FRAGMENT";
+	public static final int TITLE_ID = R.string.shared_string_my_tracks;
+
+	private static final String ROW_NUMBER_TAG = TAG + "_row_number";
+
+	private static final DashFragmentData.ShouldShowFunction SHOULD_SHOW_FUNCTION =
+			new DashboardOnMap.DefaultShouldShow() {
+				@Override
+				public int getTitleId() {
+					return TITLE_ID;
+				}
+			};
+	static final DashFragmentData FRAGMENT_DATA =
+			new DashFragmentData(TAG, DashTrackFragment.class, SHOULD_SHOW_FUNCTION, 110, ROW_NUMBER_TAG);
 
 	private boolean updateEnable;
 
 	@Override
-	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+	public View initView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 		View view = getActivity().getLayoutInflater().inflate(R.layout.dash_common_fragment, container, false);
 		TextView header = (TextView) view.findViewById(R.id.fav_text);
-		header.setText(R.string.shared_string_my_tracks);
+		header.setText(TITLE_ID);
 
 		(view.findViewById(R.id.show_all)).setOnClickListener(new View.OnClickListener() {
 			@Override
@@ -59,6 +73,7 @@ public class DashTrackFragment extends DashBaseFragment {
 				getMyApplication().getSettings().FAVORITES_TAB.set(FavoritesActivity.GPX_TAB);
 				favorites.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
 				activity.startActivity(favorites);
+				closeDashboard();
 			}
 		});
 		return view;
@@ -76,14 +91,13 @@ public class DashTrackFragment extends DashBaseFragment {
 		updateEnable = false;
 	}
 
-	
-	
-	
-
 	private void setupGpxFiles() {
 		View mainView = getView();
 		final File dir = getMyApplication().getAppPath(IndexConstants.GPX_INDEX_DIR);
 		final OsmandApplication app = getMyApplication();
+		if(app == null) {
+			return;
+		}
 		
 		final List<String> list  = new ArrayList<String>();
 		for(SelectedGpxFile sg :  app.getSelectedGpxHelper().getSelectedGPXFiles() ) {
@@ -116,6 +130,8 @@ public class DashTrackFragment extends DashBaseFragment {
 			return;
 		} else {
 			(mainView.findViewById(R.id.main_fav)).setVisibility(View.VISIBLE);
+			DashboardOnMap.handleNumberOfRows(list,
+					getMyApplication().getSettings(), ROW_NUMBER_TAG);
 		}
 
 		LinearLayout tracks = (LinearLayout) mainView.findViewById(R.id.items);
@@ -154,6 +170,30 @@ public class DashTrackFragment extends DashBaseFragment {
 				}
 			});
 			ImageButton showOnMap = ((ImageButton) v.findViewById(R.id.show_on_map));
+			showOnMap.setVisibility(View.VISIBLE);
+			updateShowOnMap(app, f, v, showOnMap);
+			tracks.addView(v);
+		}
+	}
+
+	private void updateShowOnMap(final OsmandApplication app, final File f, final View pView, final ImageButton showOnMap) {
+		final GpxSelectionHelper selectedGpxHelper = app.getSelectedGpxHelper();
+		final SelectedGpxFile selected = selectedGpxHelper.getSelectedFileByPath(f.getAbsolutePath());
+		if(selected != null) {
+			showOnMap.setImageDrawable(app.getIconsCache().getIcon(R.drawable.ic_show_on_map, R.color.color_distance));
+			showOnMap.setOnClickListener(new View.OnClickListener() {
+				@Override
+				public void onClick(View v) {
+					selectedGpxHelper.selectGpxFile(selected.getGpxFile(), false, false);
+					AvailableGPXFragment.GpxInfo info = new AvailableGPXFragment.GpxInfo();
+					info.subfolder = "";
+					info.file = f;
+					AvailableGPXFragment.udpateGpxInfoView(pView, info, app, true);
+					updateShowOnMap(app, f, v, showOnMap);
+				}
+			});
+		} else {
+			showOnMap.setImageDrawable(app.getIconsCache().getContentIcon(R.drawable.ic_show_on_map));
 			showOnMap.setOnClickListener(new View.OnClickListener() {
 				@Override
 				public void onClick(View v) {
@@ -166,9 +206,6 @@ public class DashTrackFragment extends DashBaseFragment {
 					run.run();
 				}
 			});
-			showOnMap.setVisibility(View.VISIBLE);
-			showOnMap.setImageDrawable(app.getIconsCache().getContentIcon(R.drawable.ic_show_on_map));
-			tracks.addView(v);
 		}
 	}
 

@@ -51,6 +51,7 @@ public class SearchActivity extends TabActivity implements OsmAndLocationListene
 	private static final int REQUEST_FAVORITE_SELECT = 1;
 	private static final int REQUEST_ADDRESS_SELECT = 2;
 	
+	public static final String SEARCH_NEARBY = "net.osmand.search_nearby"; //$NON-NLS-1$
 	public static final String SEARCH_LAT = "net.osmand.search_lat"; //$NON-NLS-1$
 	public static final String SEARCH_LON = "net.osmand.search_lon"; //$NON-NLS-1$
 	public static final String SHOW_ONLY_ONE_TAB = "SHOW_ONLY_ONE_TAB"; //$NON-NLS-1$
@@ -81,18 +82,18 @@ public class SearchActivity extends TabActivity implements OsmAndLocationListene
 		long t = System.currentTimeMillis();
  		setContentView(R.layout.tab_content);
 		settings = ((OsmandApplication) getApplication()).getSettings();
-		Integer tab = settings.SEARCH_TAB.get();
+		
 		showOnlyOneTab = getIntent() != null && getIntent().getBooleanExtra(SHOW_ONLY_ONE_TAB, false);
 		getSupportActionBar().setTitle("");
 		getSupportActionBar().setElevation(0);
-
+		Integer tab = settings.SEARCH_TAB.get();
 		if (!showOnlyOneTab) {
 			ViewPager mViewPager = (ViewPager) findViewById(R.id.pager);
 			PagerSlidingTabStrip mSlidingTabLayout = (PagerSlidingTabStrip) findViewById(R.id.sliding_tabs);
 			List<TabItem> mTabs = new ArrayList<TabItem>();
 			mTabs.add(getTabIndicator(R.string.poi, getFragment(POI_TAB_INDEX)));
 			mTabs.add(getTabIndicator(R.string.address, getFragment(ADDRESS_TAB_INDEX)));
-			mTabs.add(getTabIndicator(R.string.search_tabs_location, getFragment(LOCATION_TAB_INDEX)));
+			mTabs.add(getTabIndicator(R.string.shared_string_location, getFragment(LOCATION_TAB_INDEX)));
 			mTabs.add(getTabIndicator(R.string.favorite, getFragment(FAVORITES_TAB_INDEX)));
 			mTabs.add(getTabIndicator(R.string.shared_string_history, getFragment(HISTORY_TAB_INDEX)));
 
@@ -162,7 +163,8 @@ public class SearchActivity extends TabActivity implements OsmAndLocationListene
 		if(tab == POI_TAB_INDEX) {
 			return SearchPoiFilterFragment.class;
 		} else if(tab == ADDRESS_TAB_INDEX) {
-			return searchOnLine ? SearchAddressOnlineFragment.class : SearchAddressFragment.class;
+//			return searchOnLine ? SearchAddressOnlineFragment.class : SearchAddressFragment.class;
+			return SearchAddressFragment.class;
 		} else if(tab == LOCATION_TAB_INDEX) {
 			return NavigatePointFragment.class;
 		} else if(tab == HISTORY_TAB_INDEX) {
@@ -186,16 +188,16 @@ public class SearchActivity extends TabActivity implements OsmAndLocationListene
 	}
 
 	private void setTopSpinner() {
-		spinnerAdapter = new ArrayAdapter<String>(getSupportActionBar().getThemedContext(), android.R.layout.simple_spinner_item,
+		spinnerAdapter = new ArrayAdapter<String>(getSupportActionBar().getThemedContext(), R.layout.spinner_item,
 				new ArrayList<String>(Arrays.asList(new String[]{
 						getString(R.string.search_position_undefined),
-						getString(R.string.search_position_current_location),
+						getString(R.string.shared_string_my_location) + getString(R.string.shared_string_ellipsis),
 						getString(R.string.search_position_map_view),
 						getString(R.string.search_position_favorites),
 						getString(R.string.search_position_address)
 					}))
 				);
-		spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+		spinnerAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item);
         getSupportActionBar().setListNavigationCallbacks(spinnerAdapter, new OnNavigationListener() {
 			
 			@Override
@@ -302,6 +304,11 @@ public class SearchActivity extends TabActivity implements OsmAndLocationListene
 	@Override
 	protected void onResume() {
 		super.onResume();
+		if (!showOnlyOneTab) {
+			Integer tab = settings.SEARCH_TAB.get();
+			ViewPager mViewPager = (ViewPager) findViewById(R.id.pager);
+			mViewPager.setCurrentItem(Math.min(tab, HISTORY_TAB_INDEX));
+		}
 	}
 	
 	@Override
@@ -358,15 +365,6 @@ public class SearchActivity extends TabActivity implements OsmAndLocationListene
 	}
 	
 	public void setAddressSpecContent() {
-//		mTabsAdapter.mViewPager.setCurrentItem(0);
-//		mTabsAdapter.mTabHost.setCurrentTab(0);
-//		if (searchOnLine) {
-//			mTabsAdapter.mTabs.get(1).clss = SearchAddressOnlineFragment.class;
-//		} else {
-//			mTabsAdapter.mTabs.get(1).clss = SearchAddressFragment.class;
-//		}
-//		mTabsAdapter.notifyDataSetChanged();
-//		mTabsAdapter.mViewPager.invalidate();
 		Intent intent = getIntent();
 		finish();
 		startActivity(intent);

@@ -7,6 +7,7 @@ import java.util.Map;
 
 public class RenderingRuleStorageProperties {
 
+	public static final String UI_CATEGORY_HIDDEN = "ui_hidden";
 	public static final String A_ENGINE_V1 = "engine_v1";
 	public static final String A_APP_MODE= "appMode";
 	
@@ -19,6 +20,11 @@ public class RenderingRuleStorageProperties {
 	public static final String TEST = "test";
 	public static final String DISABLE = "disable";
 	
+	
+	public static final String INTERSECTION_MARGIN = "intersectionMargin";
+	public static final String INTERSECTION_SIZE_FACTOR = "intersectionSizeFactor";
+	public static final String TEXT_ITALIC = "textItalic";
+	public static final String TEXT_BOLD= "textBold";
 	public static final String TEXT_LENGTH = "textLength";
 	public static final String NAME_TAG = "nameTag";
 	public static final String NAME_TAG2 = "nameTag2";
@@ -26,6 +32,7 @@ public class RenderingRuleStorageProperties {
 	public static final String SHIELD = "shield";
 	public static final String SHADOW_RADIUS = "shadowRadius";
 	public static final String SHADOW_COLOR = "shadowColor";
+	public static final String ONEWAY_ARROWS_COLOR = "onewayArrowsColor";
 	public static final String SHADER = "shader";
 	public static final String CAP_5 = "cap_5";
 	public static final String CAP_4 = "cap_4";
@@ -59,7 +66,6 @@ public class RenderingRuleStorageProperties {
 	public static final String COLOR_0 = "color_0";
 	public static final String COLOR__1 = "color__1";
 	public static final String COLOR__2 = "color__2";
-	public static final String TEXT_BOLD = "textBold";
 	public static final String TEXT_ORDER = "textOrder";
 	public static final String ICON_ORDER = "iconOrder";
 	public static final String ICON_VISIBLE_SIZE = "iconVisibleSize";
@@ -101,6 +107,7 @@ public class RenderingRuleStorageProperties {
 	public RenderingRuleProperty R_SHADOW_RADIUS;
 	public RenderingRuleProperty R_SHADOW_COLOR;
 	public RenderingRuleProperty R_SHADER;
+	public RenderingRuleProperty R_ONEWAY_ARROWS_COLOR;
 	public RenderingRuleProperty R_CAP_5;
 	public RenderingRuleProperty R_CAP_4;
 	public RenderingRuleProperty R_CAP_3;
@@ -134,6 +141,7 @@ public class RenderingRuleStorageProperties {
 	public RenderingRuleProperty R_COLOR__1;
 	public RenderingRuleProperty R_COLOR__2;
 	public RenderingRuleProperty R_TEXT_BOLD;
+	public RenderingRuleProperty R_TEXT_ITALIC;
 	public RenderingRuleProperty R_TEXT_ORDER;
 	public RenderingRuleProperty R_ICON_ORDER;
 	public RenderingRuleProperty R_TEXT_MIN_DISTANCE;
@@ -147,6 +155,8 @@ public class RenderingRuleStorageProperties {
 	public RenderingRuleProperty R_ICON_4;
 	public RenderingRuleProperty R_ICON_5;
 	public RenderingRuleProperty R_ICON_VISIBLE_SIZE;
+	public RenderingRuleProperty R_INTERSECTION_MARGIN;
+	public RenderingRuleProperty R_INTERSECTION_SIZE_FACTOR;
 	public RenderingRuleProperty R_LAYER;
 	public RenderingRuleProperty R_ORDER;
 	public RenderingRuleProperty R_POINT;
@@ -200,6 +210,9 @@ public class RenderingRuleStorageProperties {
 		R_AREA = registerRuleInternal(RenderingRuleProperty.createInputBooleanProperty(AREA));
 		R_CYCLE = registerRuleInternal(RenderingRuleProperty.createInputBooleanProperty(CYCLE));
 		
+		R_INTERSECTION_MARGIN = registerRuleInternal(RenderingRuleProperty.createOutputFloatProperty(INTERSECTION_MARGIN));
+		R_INTERSECTION_SIZE_FACTOR = registerRuleInternal(RenderingRuleProperty.createOutputFloatProperty(INTERSECTION_SIZE_FACTOR));
+		
 		R_TEXT_LENGTH = registerRuleInternal(RenderingRuleProperty.createInputIntProperty(TEXT_LENGTH));
 		R_NAME_TAG = registerRuleInternal(RenderingRuleProperty.createInputStringProperty(NAME_TAG));
 		R_NAME_TAG2 = registerRuleInternal(RenderingRuleProperty.createOutputStringProperty(NAME_TAG2));
@@ -231,6 +244,7 @@ public class RenderingRuleStorageProperties {
 		R_TEXT_COLOR = registerRuleInternal(RenderingRuleProperty.createOutputColorProperty(TEXT_COLOR));
 
 		R_TEXT_BOLD = registerRuleInternal(RenderingRuleProperty.createOutputBooleanProperty(TEXT_BOLD));
+		R_TEXT_ITALIC = registerRuleInternal(RenderingRuleProperty.createOutputBooleanProperty(TEXT_ITALIC));
 		R_TEXT_ON_PATH = registerRuleInternal(RenderingRuleProperty.createOutputBooleanProperty(TEXT_ON_PATH));
 
 		// point
@@ -284,6 +298,8 @@ public class RenderingRuleStorageProperties {
 
 		R_SHADOW_COLOR = registerRuleInternal(RenderingRuleProperty.createOutputColorProperty(SHADOW_COLOR));
 		R_SHADOW_RADIUS = registerRuleInternal(RenderingRuleProperty.createOutputFloatProperty(SHADOW_RADIUS));
+
+		R_ONEWAY_ARROWS_COLOR = registerRuleInternal(RenderingRuleProperty.createOutputColorProperty(ONEWAY_ARROWS_COLOR));
 	}
 
 	public RenderingRuleProperty get(String name) {
@@ -299,12 +315,17 @@ public class RenderingRuleStorageProperties {
 	}
 	
 	private RenderingRuleProperty registerRuleInternal(RenderingRuleProperty p) {
-		if(get(p.getAttrName()) == null) {
-			properties.put(p.getAttrName(), p);
+		RenderingRuleProperty existing = get(p.getAttrName());
+		properties.put(p.getAttrName(), p);
+		if(existing == null) {
 			p.setId(rules.size());
 			rules.add(p);
+		} else {
+			p.setId(existing.getId());
+			rules.set(existing.getId(), p);
+			customRules.remove(existing);
 		}
-		return get(p.getAttrName());
+		return p;
 	}
 
 	public RenderingRuleProperty registerRule(RenderingRuleProperty p) {
